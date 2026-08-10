@@ -21,3 +21,4 @@ package-lock.json
 # Editor / agent tooling artifacts
 .omo/
 PowerShellEditorServices.json
+.worktrees/
