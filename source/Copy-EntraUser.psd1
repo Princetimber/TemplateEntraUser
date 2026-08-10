@@ -49,7 +49,12 @@ PowerShellVersion = '7.0'
 # ProcessorArchitecture = ''
 
 # Modules that must be imported into the global environment prior to importing this module
-RequiredModules = @()
+RequiredModules = @(
+    @{ ModuleName = 'Microsoft.Graph.Authentication'; ModuleVersion = '2.25.0' },
+    @{ ModuleName = 'Microsoft.Graph.Users'; ModuleVersion = '2.25.0' },
+    @{ ModuleName = 'Microsoft.Graph.Groups'; ModuleVersion = '2.25.0' },
+    @{ ModuleName = 'Microsoft.Graph.Identity.Governance'; ModuleVersion = '2.25.0' }
+)
 
 # Assemblies that must be loaded prior to importing this module
 # RequiredAssemblies = @()
@@ -67,7 +72,7 @@ RequiredModules = @()
 # NestedModules = @()
 
 # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
-FunctionsToExport = @()
+FunctionsToExport = @('Copy-EntraUser')
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
 CmdletsToExport = @()
@@ -93,7 +98,7 @@ PrivateData = @{
     PSData = @{
 
         # Tags applied to this module. These help with module discovery in online galleries.
-        # Tags = @()
+        Tags = @('EntraID', 'MicrosoftGraph', 'PIM', 'IdentityGovernance')
 
         # A URL to the license for this module.
         # LicenseUri = ''

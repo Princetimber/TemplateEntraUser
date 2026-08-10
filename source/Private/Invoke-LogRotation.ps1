@@ -1,4 +1,4 @@
-#Requires -Version 7.0
+﻿#Requires -Version 7.0
 
 # Rotates log files: shifts numbered backups up (log.4→removed, log.3→log.4, ..., log→log.1).
 # Called inside the Write-ToLog mutex — do NOT call this function directly.

@@ -1,4 +1,4 @@
-#Requires -Version 7.0
+﻿#Requires -Version 7.0
 
 # Timestamp format used for log file names and archives
 $script:LogTimestampFormat = 'yyyyMMdd_HHmmss'
