@@ -1,0 +1,50 @@
+TOPIC
+    about_TemplateModule
+
+SHORT DESCRIPTION
+    {{MODULE_DESCRIPTION}}
+
+LONG DESCRIPTION
+    The TemplateModule module provides PowerShell automation capabilities
+    following production-grade standards including:
+
+    - Advanced function patterns with CmdletBinding
+    - SupportsShouldProcess on state-changing operations only
+    - Comprehensive input validation
+    - Logging via native PowerShell streams (Write-Verbose, Write-Warning, etc.)
+    - Full Pester v5+ test coverage
+
+COMMANDS
+    Get-Greeting
+        Generates a personalized greeting message with logging and
+        input validation. Read-only function.
+
+    Export-Greeting
+        Writes greeting messages to a file. Demonstrates correct
+        SupportsShouldProcess usage for state-changing operations.
+
+EXAMPLES
+    Example 1: Basic usage
+        Get-Greeting -Name "World"
+
+    Example 2: Get rich object output
+        Get-Greeting -Name "World" -PassThru
+
+    Example 3: Export greetings to a file
+        Get-Greeting -Name "Alice", "Bob" | Export-Greeting -FilePath "./greetings.txt"
+
+    Example 4: Preview file export without writing
+        Export-Greeting -Greeting "Hello" -FilePath "./out.txt" -WhatIf
+
+NOTES
+    This module requires PowerShell 7.0 or later.
+
+    SupportsShouldProcess (-WhatIf, -Confirm) is used only on functions
+    that change state (Export-Greeting), not on read-only functions
+    (Get-Greeting).
+
+SEE ALSO
+    Get-Greeting
+    Export-Greeting
+    Write-ToLog
+    Format-GreetingMessage
