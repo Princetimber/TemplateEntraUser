@@ -1,0 +1,27 @@
+TOPIC
+    about_Copy-EntraUser
+
+SHORT DESCRIPTION
+    Creates a new user from an existing Entra ID user Object with all their eassociated permissions
+
+LONG DESCRIPTION
+    The Copy-EntraUser module provides PowerShell automation capabilities
+    following production-grade standards including:
+
+    - Advanced function patterns with CmdletBinding
+    - SupportsShouldProcess on state-changing operations only
+    - Comprehensive input validation
+    - Logging via native PowerShell streams (Write-Verbose, Write-Warning, etc.)
+    - Full Pester v5+ test coverage
+
+COMMANDS
+    # Add your module's exported functions here.
+
+EXAMPLES
+    # Add usage examples for your module's functions here.
+
+NOTES
+    This module requires PowerShell 7.0 or later.
+
+SEE ALSO
+    Write-ToLog

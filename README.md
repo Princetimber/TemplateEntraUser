@@ -1,4 +1,4 @@
-# {{MODULE_NAME}}
+# Copy-EntraUser
 
 A production-ready PowerShell module template built with the [Sampler](https://github.com/gaelcolas/Sampler) framework. This template provides standardized patterns, comprehensive testing, and CI/CD integration to accelerate your PowerShell module development.
 
@@ -57,12 +57,10 @@ New-Item -Path source/Public/Get-MyData.ps1 -ItemType File
 New-Item -Path tests/Unit/Public/Get-MyData.tests.ps1 -ItemType File
 ```
 
-Follow the patterns in `Get-Greeting.ps1` (read-only) and `Export-Greeting.ps1` (state-changing with ShouldProcess).
-
 ## Directory Structure
 
 ```
-{{MODULE_NAME}}/
+Copy-EntraUser/
 ├── .github/
 │   ├── copilot-instructions.md           # GitHub Copilot instructions
 │   └── workflows/
@@ -71,15 +69,12 @@ Follow the patterns in `Get-Greeting.ps1` (read-only) and `Export-Greeting.ps1` 
 ├── .vscode/
 │   └── tasks.json                        # VS Code build/test tasks
 ├── source/
-│   ├── {{MODULE_NAME}}.psd1              # Module manifest
-│   ├── {{MODULE_NAME}}.psm1              # Root module (dot-sources functions)
+│   ├── Copy-EntraUser.psd1              # Module manifest
+│   ├── Copy-EntraUser.psm1              # Root module (dot-sources functions)
 │   ├── en-US/
-│   │   └── about_{{MODULE_NAME}}.help.txt # About help file
+│   │   └── about_Copy-EntraUser.help.txt # About help file
 │   ├── Public/                           # Exported functions (one per file)
-│   │   ├── Get-Greeting.ps1              # Example read-only function
-│   │   └── Export-Greeting.ps1           # Example state-changing function
 │   └── Private/                          # Internal helpers (one per file)
-│       ├── Format-GreetingMessage.ps1    # Example private function
 │       ├── Write-ToLog.ps1              # Thread-safe logger (core entry point)
 │       ├── Clear-LogFile.ps1            # Clears the active log (archive option)
 │       ├── Get-LogFilePath.ps1          # Returns current log file path
@@ -92,10 +87,7 @@ Follow the patterns in `Get-Greeting.ps1` (read-only) and `Export-Greeting.ps1` 
 │   │   └── module.tests.ps1              # ScriptAnalyzer, changelog, help tests
 │   └── Unit/
 │       ├── Public/
-│       │   ├── Get-Greeting.tests.ps1
-│       │   └── Export-Greeting.tests.ps1
 │       └── Private/
-│           ├── Format-GreetingMessage.tests.ps1
 │           ├── Write-ToLog.tests.ps1
 │           ├── Clear-LogFile.tests.ps1
 │           ├── Get-LogFilePath.tests.ps1
@@ -117,20 +109,6 @@ Follow the patterns in `Get-Greeting.ps1` (read-only) and `Export-Greeting.ps1` 
 ```
 
 ## Patterns Demonstrated
-
-### Get-Greeting (Read-Only Function)
-
-- `[CmdletBinding()]` without ShouldProcess (read-only operations don't need it)
-- Pipeline input, `PassThru` for rich object output
-- Input validation with `ValidateSet`, `ValidateNotNullOrEmpty`
-- Proper `ErrorRecord` construction with `ThrowTerminatingError`
-
-### Export-Greeting (State-Changing Function)
-
-- `[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium')]` - correct use of ShouldProcess
-- `-WhatIf` and `-Confirm` support for safe file operations
-- `-Force` to overwrite, `-Append` to add to existing files
-- `-PassThru` returning `[System.IO.FileInfo]`
 
 ### Logging Framework (Private)
 
@@ -268,13 +246,13 @@ Invoke-Pester -CodeCoverage source/**/*.ps1
 
 | Placeholder | Description | Example |
 |-------------|-------------|---------|
-| `{{MODULE_NAME}}` | Module name | `Invoke-MyModule` |
-| `{{MODULE_DESCRIPTION}}` | Module description | `Storage management for Windows Server` |
-| `{{AUTHOR}}` | Author name | `John Doe` |
-| `{{COMPANY}}` | Company/organization | `Contoso Ltd` |
+| `Copy-EntraUser` | Module name | `Invoke-MyModule` |
+| `Creates a new user from an existing Entra ID user Object with all their eassociated permissions` | Module description | `Storage management for Windows Server` |
+| `Olamide Olaleye` | Author name | `John Doe` |
+| `Fountview Enterprise Solutions Limited` | Company/organization | `Contoso Ltd` |
 | `{{MODULE_GUID}}` | Unique module GUID | `12345678-1234-1234-1234-123456789012` |
 
-Files named `TemplateModule.*` will be renamed to your actual module name.
+Files named `Copy-EntraUser.*` will be renamed to your actual module name.
 
 ## License
 

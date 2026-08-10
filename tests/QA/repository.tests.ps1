@@ -79,7 +79,7 @@ Describe 'Repository contracts' -Tag 'QA' {
             $tokens = $null
             $parseErrors = $null
             $moduleAst = [System.Management.Automation.Language.Parser]::ParseFile(
-                (Join-Path $script:projectPath 'source/TemplateModule.psm1'),
+                (Join-Path $script:projectPath 'source/Copy-EntraUser.psm1'),
                 [ref] $tokens,
                 [ref] $parseErrors
             )
@@ -99,8 +99,8 @@ Describe 'Repository contracts' -Tag 'QA' {
                 Join-Path $script:projectPath 'source/Private/Write-ToLog.ps1'
             ) -Raw
 
-            $loggerContent | Should -Match 'TemplateModule_\$\('
-            $loggerContent | Should -Match 'Global\\TemplateModuleLog'
+            $loggerContent | Should -Match 'Copy-EntraUser_\$\('
+            $loggerContent | Should -Match 'Global\\Copy-EntraUserLog'
             $loggerContent | Should -Not -Match 'Invoke-ADDSDomainController'
         }
     }
