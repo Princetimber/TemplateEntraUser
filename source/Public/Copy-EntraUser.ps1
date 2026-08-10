@@ -27,7 +27,7 @@ function Copy-EntraUser {
         UserPrincipalName, MailNickname, PasswordProfile, AccountEnabled)
         for a user to be created.
     .PARAMETER TenantId
-        The Entra ID tenant ID.
+        The Entra ID tenant ID (GUID) to connect to.
     .PARAMETER ClientId
         The app registration's application (client) ID.
     .PARAMETER CertificateThumbprint
