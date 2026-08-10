@@ -13,25 +13,7 @@ A production-ready PowerShell module template built with the [Sampler](https://g
 
 ## Quick Start
 
-### 1. Create Your Module from Template
-
-```powershell
-# Clone or download this repository
-git clone <your-template-repo-url> MyNewModule
-cd MyNewModule
-
-# Run the initialization script
-./Initialize-Template.ps1
-```
-
-The init script will prompt you for:
-- **Module Name** (e.g., `Invoke-MyModule`) - validates approved Verb-Noun pattern
-- **Description** - what your module does
-- **Author** - your name
-- **Company** - your organization
-- **GUID** - auto-generated if not provided
-
-### 2. Build Your Module
+The `Copy-EntraUser` module is already instantiated. To build and import it:
 
 ```powershell
 # First build (resolves dependencies)
@@ -43,18 +25,11 @@ The init script will prompt you for:
 # Run tests
 ./build.ps1 -tasks test
 
+# Import the module
+Import-Module ./output/module/Copy-EntraUser
+
 # Lint
 Invoke-ScriptAnalyzer -Path source/ -Recurse
-```
-
-### 3. Add Your Functions
-
-```powershell
-# Add a public function
-New-Item -Path source/Public/Get-MyData.ps1 -ItemType File
-
-# Add corresponding test
-New-Item -Path tests/Unit/Public/Get-MyData.tests.ps1 -ItemType File
 ```
 
 ## Directory Structure
@@ -180,17 +155,7 @@ Two independent publish targets are available — run only the one you need:
 
 ### Step 2 — Store the credential locally (never commit it)
 
-The easiest way is to pass `-PublishTarget` to `Initialize-Template.ps1` — it creates `secrets.local.ps1` automatically with only the credential needed:
-
-```powershell
-# PSGallery only
-./Initialize-Template.ps1 -PublishTarget PSGallery
-
-# GitHub Release only
-./Initialize-Template.ps1 -PublishTarget GitHub
-```
-
-Alternatively, copy the example file and populate it manually:
+Copy the example file and populate it with your credentials:
 
 ```powershell
 Copy-Item secrets.local.ps1.example secrets.local.ps1
@@ -271,7 +236,3 @@ Built with:
 1. Fork the template repository
 2. Make your improvements
 3. Submit a pull request with a clear description
-
----
-
-**Ready to build your module?** Run `./Initialize-Template.ps1` to get started!

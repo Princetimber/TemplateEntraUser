@@ -31,26 +31,6 @@ Describe 'Repository contracts' -Tag 'QA' {
         }
     }
 
-    Context 'Template initialization' {
-        BeforeAll {
-            $script:initializerContent = Get-Content -Path (
-                Join-Path $script:projectPath 'Initialize-Template.ps1'
-            ) -Raw
-        }
-
-        It 'Uses literal replacement for fixed template tokens' {
-            $script:initializerContent | Should -Match '\$content\.Replace\(\$key, \$replacements\[\$key\]\)'
-            $script:initializerContent | Should -Not -Match '-replace\s+\[regex\]::Escape\(\$key\)'
-        }
-
-        It 'Escapes apostrophes before writing secrets to PowerShell source' {
-            $script:initializerContent | Should -Match '\$escapedGalleryApiKey\s*=\s*\$GalleryApiKey\.Replace\("''", "''''"\)'
-            $script:initializerContent | Should -Match '\$escapedGitHubToken\s*=\s*\$GitHubToken\.Replace\("''", "''''"\)'
-            $script:initializerContent | Should -Match '\$env:PSGALLERY_API_KEY = ''\$escapedGalleryApiKey'''
-            $script:initializerContent | Should -Match '\$env:GITHUB_TOKEN = ''\$escapedGitHubToken'''
-        }
-    }
-
     Context 'Source layout' {
         It 'Contains a function matching each private script filename' {
             $privateScripts = Get-ChildItem -Path (

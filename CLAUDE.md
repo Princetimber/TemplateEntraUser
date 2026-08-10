@@ -4,15 +4,13 @@ Project context for Claude Code and AI agents.
 
 ## Project Overview
 
-PowerShell module template built with the **Sampler** framework. This template serves as a starting point for creating enterprise-grade PowerShell modules with:
+PowerShell module `Copy-EntraUser` built with the **Sampler** framework. This module provides enterprise-grade capabilities with:
 
 - **Standardized structure** following Sampler conventions
 - **Comprehensive testing** with Pester v5+
 - **CI/CD integration** for GitHub Actions and Azure Pipelines
 - **Code quality enforcement** via ScriptAnalyzer and code coverage
 - **Complete documentation** with instruction files for AI agents
-
-After cloning, run `Initialize-Template.ps1` to customize the template with your module name, author, and description.
 
 ## PowerShell Development Standards
 
