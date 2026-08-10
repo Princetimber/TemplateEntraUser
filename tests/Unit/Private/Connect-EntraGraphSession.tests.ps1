@@ -67,4 +67,20 @@ Describe 'Connect-EntraGraphSession' {
             Compare-Object $script:capturedScopes (Get-RequiredGraphPermission) | Should -BeNullOrEmpty
         }
     }
+
+    Context '-WhatIf prevents any live connection' {
+        BeforeAll {
+            Mock Connect-MgGraph { }
+            Mock Get-MgContext { [pscustomobject]@{ AuthType = 'None' } }
+        }
+
+        It 'Calls neither the CBA attempt nor the interactive fallback' {
+            Connect-EntraGraphSession -TenantId '00000000-0000-0000-0000-000000000000' `
+                -ClientId '00000000-0000-0000-0000-000000000001' `
+                -CertificateThumbprint 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' `
+                -WhatIf
+
+            Should -Invoke Connect-MgGraph -Times 0
+        }
+    }
 }

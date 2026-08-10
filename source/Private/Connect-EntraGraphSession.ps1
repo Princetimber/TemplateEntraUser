@@ -76,8 +76,10 @@ function Connect-EntraGraphSession {
     }
 
     if (-not $cbaSucceeded) {
-        Connect-MgGraph -TenantId $TenantId -Scopes (Get-RequiredGraphPermission) -ErrorAction Stop
-        Write-Verbose "Connected via interactive delegated auth (TenantId=$TenantId)."
+        if ($PSCmdlet.ShouldProcess($TenantId, 'Connect to Microsoft Graph (interactive delegated sign-in)')) {
+            Connect-MgGraph -TenantId $TenantId -Scopes (Get-RequiredGraphPermission) -ErrorAction Stop
+            Write-Verbose "Connected via interactive delegated auth (TenantId=$TenantId)."
+        }
     }
 
     return Get-MgContext
