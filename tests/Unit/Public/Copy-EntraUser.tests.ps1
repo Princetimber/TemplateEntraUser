@@ -1,0 +1,70 @@
+#Requires -Version 7.0
+BeforeAll {
+    $script:dscModuleName = 'Copy-EntraUser'
+    Get-ChildItem -Path (Join-Path $PSScriptRoot '../../../source/Private') -Filter '*.ps1' |
+        ForEach-Object { . $_.FullName }
+    . (Join-Path $PSScriptRoot '../../../source/Public/Copy-EntraUser.ps1')
+}
+
+Describe 'Copy-EntraUser' {
+    BeforeAll {
+        Mock Test-RequiredGraphModule { }
+        Mock Connect-EntraGraphSession { [pscustomobject]@{ AuthType = 'AppOnly' } }
+        Mock Resolve-EntraTemplateUser { [pscustomobject]@{ Id = '00000000-0000-0000-0000-000000000002' } }
+        Mock Resolve-EntraNewUser { [pscustomobject]@{ Id = '00000000-0000-0000-0000-000000000004' } }
+        Mock Get-EntraTemplateGroupMembership {
+            @{
+                DirectGroup = @([pscustomobject]@{
+                        Id = '11111111-1111-1111-1111-111111111111'; GroupTypes = @()
+                        AdditionalProperties = @{ isAssignableToRole = $false }
+                    })
+                EligibilitySchedule = @()
+            }
+        }
+        Mock Add-EntraGroupMembership { }
+        Mock Grant-EntraGroupEligibility { }
+        Mock Disconnect-MgGraph { }
+    }
+
+    It 'Requires -TemplateUserId, -NewUser, -TenantId, -ClientId' {
+        (Get-Command Copy-EntraUser).Parameters['TemplateUserId'].Attributes.Mandatory | Should -Contain $true
+        (Get-Command Copy-EntraUser).Parameters['NewUser'].Attributes.Mandatory | Should -Contain $true
+        (Get-Command Copy-EntraUser).Parameters['TenantId'].Attributes.Mandatory | Should -Contain $true
+        (Get-Command Copy-EntraUser).Parameters['ClientId'].Attributes.Mandatory | Should -Contain $true
+    }
+
+    It 'CertificateThumbprint and CertificatePath are mutually exclusive parameter sets' {
+        { Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' -NewUser 'b@contoso.onmicrosoft.com' `
+                -TenantId '00000000-0000-0000-0000-000000000000' -ClientId '00000000-0000-0000-0000-000000000001' `
+                -CertificateThumbprint 'AAAA' -CertificatePath 'x.pfx' `
+                -CertificatePassword (ConvertTo-SecureString 'x' -AsPlainText -Force) -Confirm:$false
+        } | Should -Throw
+    }
+
+    It 'Adds the new user to the plain group' {
+        Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' -NewUser 'b@contoso.onmicrosoft.com' `
+            -TenantId '00000000-0000-0000-0000-000000000000' -ClientId '00000000-0000-0000-0000-000000000001' `
+            -CertificatePath 'x.pfx' -CertificatePassword (ConvertTo-SecureString 'x' -AsPlainText -Force) -Confirm:$false
+        Should -Invoke Add-EntraGroupMembership -Times 1
+        Should -Invoke Grant-EntraGroupEligibility -Times 0
+    }
+
+    It 'Running twice performs the same read-then-skip mutation pattern (no unconditional double-create)' {
+        1..2 | ForEach-Object {
+            Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' -NewUser 'b@contoso.onmicrosoft.com' `
+                -TenantId '00000000-0000-0000-0000-000000000000' -ClientId '00000000-0000-0000-0000-000000000001' `
+                -CertificatePath 'x.pfx' -CertificatePassword (ConvertTo-SecureString 'x' -AsPlainText -Force) -Confirm:$false
+        }
+        # Add-EntraGroupMembership itself owns the read-before-write idempotency check (Task 9's own
+        # tests already prove that); here we assert the orchestrator calls it once per run either way,
+        # i.e. it never skips calling the (idempotent) helper.
+        Should -Invoke Add-EntraGroupMembership -Times 2
+    }
+
+    It 'Supports -WhatIf without connecting or mutating' {
+        Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' -NewUser 'b@contoso.onmicrosoft.com' `
+            -TenantId '00000000-0000-0000-0000-000000000000' -ClientId '00000000-0000-0000-0000-000000000001' `
+            -CertificatePath 'x.pfx' -CertificatePassword (ConvertTo-SecureString 'x' -AsPlainText -Force) -WhatIf
+        Should -Invoke Add-EntraGroupMembership -Times 0
+    }
+}

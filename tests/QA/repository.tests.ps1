@@ -84,4 +84,23 @@ Describe 'Repository contracts' -Tag 'QA' {
             $loggerContent | Should -Not -Match 'Invoke-ADDSDomainController'
         }
     }
+
+    Context 'Permission documentation drift' {
+        It 'Copy-EntraUser.NOTES documents every permission Get-RequiredGraphPermission returns' {
+            . (Join-Path $script:projectPath 'source/Private/Get-RequiredGraphPermission.ps1')
+            # NOTE: Get-Help against the raw .ps1 *path* only ever surfaces comment-based
+            # help attached to the file's top-level ScriptBlockAst. This file's help is
+            # attached to the nested FunctionDefinitionAst (Copy-EntraUser is a
+            # "one function per file" script, per the Sampler dot-sourcing convention),
+            # so the script must be dot-sourced and help retrieved by function name
+            # instead -- confirmed via (Get-Command <path>).ScriptBlock.Ast.GetHelpContent()
+            # returning $null for path-based lookups against function-wrapped scripts.
+            . (Join-Path $script:projectPath 'source/Public/Copy-EntraUser.ps1')
+            $notes = (Get-Help Copy-EntraUser).AlertSet.Alert.Text
+
+            foreach ($permission in Get-RequiredGraphPermission) {
+                $notes | Should -Match ([regex]::Escape($permission))
+            }
+        }
+    }
 }
