@@ -9,7 +9,6 @@ A production-ready PowerShell module template built with the [Sampler](https://g
 - **Comprehensive Testing** - Pester v5+ with 85% code coverage threshold, QA tests for ScriptAnalyzer compliance
 - **CI/CD Integration** - Pre-configured GitHub Actions and Azure Pipelines workflows
 - **Example Functions** - Working examples demonstrating correct patterns (read-only vs state-changing)
-- **Quick Setup** - Interactive `Initialize-Template.ps1` script for rapid customization
 
 ## Quick Start
 
