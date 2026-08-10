@@ -31,6 +31,55 @@ Import-Module ./output/module/Copy-EntraUser
 Invoke-ScriptAnalyzer -Path source/ -Recurse
 ```
 
+## Authentication
+
+The `Copy-EntraUser` function authenticates via **certificate-based app-only authentication (CBA)** by default, falling back automatically to **interactive delegated sign-in** if certificate-based auth cannot be established.
+
+### Authentication Parameters
+
+Two parameter sets are available via `Connect-EntraGraphSession`:
+
+1. **Portable PFX File** (recommended, default)
+   - `-CertificatePath` — Path to a PFX certificate file
+   - `-CertificatePassword` — SecureString password protecting the PFX file
+   - Works identically on **Windows, macOS, and Linux**
+
+2. **Certificate Thumbprint** (Windows-only convenience)
+   - `-CertificateThumbprint` — Thumbprint of a certificate already in the Windows certificate store
+   - Not portable to macOS or Linux
+
+### Fallback Behavior
+
+If certificate-based authentication fails for any reason (missing certificate, expired certificate, module not installed, or API errors), the function automatically falls back to interactive delegated sign-in with an **explicit warning**:
+
+```
+Certificate-based authentication failed (...); falling back to interactive delegated sign-in.
+```
+
+Interactive sign-in requests explicit scopes from `Get-RequiredGraphPermission` — never relying on previously cached consent.
+
+## Required Graph Permissions
+
+The `Copy-EntraUser` function requires three Microsoft Graph permissions. Both application permissions (CBA) and delegated scopes (interactive fallback) use the same set:
+
+### Application Permissions (Certificate-Based Auth)
+
+| Permission | Description |
+|-----------|-------------|
+| `User.ReadWrite.All` | Read and write all user properties and group memberships |
+| `GroupMember.ReadWrite.All` | Read and write group membership for all groups |
+| `PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup` | Read and write PIM-for-Groups eligibility schedule assignments |
+
+### Delegated Scopes (Interactive Auth)
+
+| Scope | Description |
+|-------|-------------|
+| `User.ReadWrite.All` | Read and write all user properties and group memberships |
+| `GroupMember.ReadWrite.All` | Read and write group membership for all groups |
+| `PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup` | Read and write PIM-for-Groups eligibility schedule assignments |
+
+> **Note:** Both tables list the exact same three permissions. The source of truth is the `Get-RequiredGraphPermission` function, which ensures both CBA and interactive auth paths remain in sync and cannot drift.
+
 ## Directory Structure
 
 ```
@@ -81,6 +130,64 @@ Copy-EntraUser/
 ├── Resolve-Dependency.ps1                # Dependency resolver
 └── Resolve-Dependency.psd1               # Resolver configuration
 ```
+
+## Usage
+
+### Example 1: Certificate-Based Auth with Portable PFX File
+
+This example uses certificate-based app-only authentication with a portable PFX file:
+
+```powershell
+# Copy template user's group memberships and PIM eligibility to a new hire
+Copy-EntraUser `
+    -TemplateUserId 'template.user@contoso.onmicrosoft.com' `
+    -NewUser 'new.hire@contoso.onmicrosoft.com' `
+    -TenantId '00000000-0000-0000-0000-000000000000' `
+    -ClientId '00000000-0000-0000-0000-000000000001' `
+    -CertificatePath ./copy-entrauser.pfx `
+    -CertificatePassword (Read-Host -AsSecureString 'Certificate password')
+```
+
+**What happens:**
+- The function connects to Microsoft Graph using the certificate and client ID
+- Resolves both the template user (existing employee) and target user (new hire)
+- Enumerates the template user's direct group memberships
+- Identifies which groups are plain security groups and which are PIM-for-Groups groups
+- Adds the new hire as a direct member to all plain groups
+- Grants ELIGIBLE (not active) PIM-for-Groups assignments matching the template user's access tier (member vs owner)
+- Skips dynamic-membership and role-assignable groups with a warning
+
+### Example 2: Interactive Fallback with User Creation
+
+This example demonstrates the interactive fallback scenario when certificate authentication fails (e.g., certificate expired or missing):
+
+```powershell
+# Create a new user and clone template user's permissions (certificate path specified
+# but unavailable; falls back to interactive auth automatically)
+Copy-EntraUser `
+    -TemplateUserId 'template.user@contoso.onmicrosoft.com' `
+    -NewUser @{
+        DisplayName = 'New Hire'
+        UserPrincipalName = 'new.hire@contoso.onmicrosoft.com'
+        MailNickname = 'new.hire'
+        PasswordProfile = @{ Password = [System.Web.Security.Membership]::GeneratePassword(16, 4) }
+        AccountEnabled = $true
+    } `
+    -TenantId '00000000-0000-0000-0000-000000000000' `
+    -ClientId '00000000-0000-0000-0000-000000000001' `
+    -CertificatePath ./missing-or-expired.pfx `
+    -CertificatePassword (Read-Host -AsSecureString 'Certificate password')
+```
+
+**What happens:**
+- The function attempts to load the PFX certificate; if the file doesn't exist or is expired, it emits a warning:
+  ```
+  Certificate-based authentication failed (...); falling back to interactive delegated sign-in.
+  ```
+- The function then connects interactively, prompting you to sign in with your Microsoft account
+- Interactive sign-in explicitly requests the three required scopes (not relying on cached consent)
+- Creates the new user with the properties specified in the hashtable
+- Clones the template user's group memberships and PIM eligibility to the newly created account
 
 ## Patterns Demonstrated
 
