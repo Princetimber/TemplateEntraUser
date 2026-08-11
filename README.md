@@ -219,6 +219,31 @@ Copy-EntraUser -TemplateUserId 'template.user@contoso.onmicrosoft.com' -NewUser 
 - Interactive sign-in explicitly requests the three required scopes (not relying on cached consent)
 - Clones the template user's group memberships and PIM eligibility to the target user
 
+### Example 4: Creating a New User via Named Parameters
+
+Instead of hand-building a `-NewUser` hashtable, you can create a new user with individual named parameters:
+
+```powershell
+Copy-EntraUser -TemplateUserId 'template.user@contoso.onmicrosoft.com' `
+    -NewUserPrincipalName 'new.hire@contoso.onmicrosoft.com' `
+    -NewUserDisplayName 'New Hire' `
+    -NewUserMailNickname 'new.hire'
+```
+
+**What happens:**
+- `-NewUser` and `-NewUserPrincipalName` (with its companion parameters) are mutually exclusive — supply one style or the other, not both, and one of them is required
+- `-NewUserPassword` is optional; if omitted, a random password is generated with a cryptographically secure random number generator and **is never displayed, returned, or logged anywhere** — you'll need a separate flow (e.g. Entra's Temporary Access Pass, self-service password reset, or an admin password reset) to get the new user signed in
+- The generated password sets `ForceChangePasswordNextSignIn`, so it only ever needs to work for a single first sign-in
+- `-NewUserAccountEnabled` defaults to `$true`; pass `-NewUserAccountEnabled:$false` to create a disabled account
+- To supply your own password instead of auto-generating one:
+  ```powershell
+  Copy-EntraUser -TemplateUserId 'template.user@contoso.onmicrosoft.com' `
+      -NewUserPrincipalName 'new.hire@contoso.onmicrosoft.com' `
+      -NewUserDisplayName 'New Hire' `
+      -NewUserMailNickname 'new.hire' `
+      -NewUserPassword (Read-Host -AsSecureString 'Password for the new user')
+  ```
+
 ## How Copy-EntraUser Works
 
 `Copy-EntraUser` is composed of small, single-responsibility private helpers, each independently unit-tested and orchestrated by the public `Copy-EntraUser` cmdlet:
@@ -234,6 +259,7 @@ Copy-EntraUser -TemplateUserId 'template.user@contoso.onmicrosoft.com' -NewUser 
 | `Grant-EntraGroupEligibility` | Idempotently grants an ELIGIBLE (never active/permanent) PIM-for-Groups assignment mirroring the template user's access tier. |
 | `Get-RequiredGraphPermission` | Single source of truth for the required application/delegated Graph permissions, keeping both auth paths in sync. |
 | `Test-RequiredGraphModule` | Verifies the required Microsoft.Graph sub-modules are installed before connecting. |
+| `New-EntraUserPassword` | Generates a cryptographically random password (CSPRNG, never `Get-Random`) when `-NewUserPassword` is omitted from the named-parameter user-creation path. |
 
 **Key design choices:**
 - Every mutating helper (`Add-EntraGroupMembership`, `Grant-EntraGroupEligibility`, `Resolve-EntraNewUser`) reads current state before writing, so re-running `Copy-EntraUser` against an already-provisioned user makes zero mutating Graph calls (see `tests/Integration/Copy-EntraUser.Idempotency.tests.ps1`).
