@@ -153,6 +153,21 @@ Describe 'Copy-EntraUser' {
             } | Should -Throw '*not both*'
         }
 
+        It 'Throws when -NewUser is combined with a named companion parameter other than -NewUserPrincipalName (e.g. -NewUserPassword silently dropped)' {
+            $securePassword = ConvertTo-SecureString -String 'Should-Never-Be-Silently-Dropped' -AsPlainText -Force
+            {
+                Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' -NewUser 'b@contoso.onmicrosoft.com' `
+                    -NewUserPassword $securePassword -Confirm:$false
+            } | Should -Throw '*not both*'
+        }
+
+        It 'Throws when -NewUser is combined with -NewUserAccountEnabled' {
+            {
+                Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' -NewUser 'b@contoso.onmicrosoft.com' `
+                    -NewUserAccountEnabled:$false -Confirm:$false
+            } | Should -Throw '*not both*'
+        }
+
         It 'Builds the hashtable passed to Resolve-EntraNewUser from the named parameters, auto-generating a password when omitted' {
             Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' `
                 -NewUserPrincipalName 'new.hire@contoso.onmicrosoft.com' `

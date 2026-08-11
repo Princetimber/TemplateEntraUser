@@ -48,4 +48,17 @@ Describe 'New-EntraUserPassword' {
             { New-EntraUserPassword -Length 4 } | Should -Throw
         }
     }
+
+    It 'Is not gated behind ShouldProcess -- always generates a real password unconditionally' {
+        # A pure, side-effect-free generator must never be able to return $null
+        # via a declined confirmation prompt. Regression test for a bug where
+        # SupportsShouldProcess on this function let an operator answering "No"
+        # to a confusing "Generate random password?" prompt cause Copy-EntraUser
+        # to silently build an empty-string password and pass it to New-MgUser.
+        InModuleScope -ModuleName $script:dscModuleName {
+            (Get-Command New-EntraUserPassword).Parameters.Keys | Should -Not -Contain 'WhatIf'
+            (Get-Command New-EntraUserPassword).Parameters.Keys | Should -Not -Contain 'Confirm'
+            New-EntraUserPassword | Should -Not -BeNullOrEmpty
+        }
+    }
 }

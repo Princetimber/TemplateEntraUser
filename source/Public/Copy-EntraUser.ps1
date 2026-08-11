@@ -167,17 +167,19 @@ function Copy-EntraUser {
     process {
         Test-RequiredGraphModule
 
+        $newUserCompanionParameter = @('NewUserPrincipalName', 'NewUserDisplayName', 'NewUserMailNickname', 'NewUserPassword', 'NewUserAccountEnabled')
         $suppliedNewUser = $PSBoundParameters.ContainsKey('NewUser')
-        $suppliedNamedNewUser = $PSBoundParameters.ContainsKey('NewUserPrincipalName')
+        $suppliedAnyNewUserCompanion = [bool]($newUserCompanionParameter | Where-Object { $PSBoundParameters.ContainsKey($_) })
+        $suppliedNewUserPrincipalName = $PSBoundParameters.ContainsKey('NewUserPrincipalName')
 
-        if ($suppliedNewUser -and $suppliedNamedNewUser) {
-            throw 'Specify either -NewUser or -NewUserPrincipalName (with -NewUserDisplayName and -NewUserMailNickname), not both.'
+        if ($suppliedNewUser -and $suppliedAnyNewUserCompanion) {
+            throw 'Specify either -NewUser or -NewUserPrincipalName (with -NewUserDisplayName, -NewUserMailNickname, and optionally -NewUserPassword/-NewUserAccountEnabled), not both.'
         }
-        if (-not $suppliedNewUser -and -not $suppliedNamedNewUser) {
+        if (-not $suppliedNewUser -and -not $suppliedNewUserPrincipalName) {
             throw 'You must supply either -NewUser (an existing user identifier or a properties hashtable) or -NewUserPrincipalName (with -NewUserDisplayName and -NewUserMailNickname) to create a new user.'
         }
 
-        if ($suppliedNamedNewUser) {
+        if ($suppliedNewUserPrincipalName) {
             if (-not $NewUserDisplayName -or -not $NewUserMailNickname) {
                 throw '-NewUserDisplayName and -NewUserMailNickname are both required alongside -NewUserPrincipalName.'
             }
