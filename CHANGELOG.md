@@ -5,6 +5,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Copy-EntraUser` now accepts named parameters (`-NewUserPrincipalName`,
+  `-NewUserDisplayName`, `-NewUserMailNickname`, `-NewUserPassword`,
+  `-NewUserAccountEnabled`) as an alternative to hand-building a `-NewUser`
+  properties hashtable when creating a new user. `-NewUser` is unchanged and
+  still works for both an existing-user identifier and the hashtable form;
+  the two styles are mutually exclusive, with an actionable error if
+  neither or both are supplied. If `-NewUserPassword` is omitted, a random
+  password is generated via the new `New-EntraUserPassword` private helper
+  (a CSPRNG, never `Get-Random`) and is never written to any output
+  stream — the operator retrieves or resets it through a separate flow,
+  since it cannot be recovered from the function's output. The generated
+  password sets `ForceChangePasswordNextSignIn`, so it only needs to work
+  for a single first sign-in.
+
 ### Changed
 
 - `Copy-EntraUser`'s `-TenantId` and `-ClientId` parameters are no longer

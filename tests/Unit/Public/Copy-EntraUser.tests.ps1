@@ -27,11 +27,13 @@ Describe 'Copy-EntraUser' {
         Mock Add-EntraGroupMembership { } -ModuleName $script:dscModuleName
         Mock Grant-EntraGroupEligibility { } -ModuleName $script:dscModuleName
         Mock Disconnect-MgGraph { } -ModuleName $script:dscModuleName
+        Mock New-EntraUserPassword { ConvertTo-SecureString -String 'AutoGenPlaceholder1' -AsPlainText -Force } -ModuleName $script:dscModuleName
     }
 
-    It 'Requires -TemplateUserId and -NewUser; TenantId/ClientId are optional (interactive mode needs neither)' {
+    It 'Requires -TemplateUserId; -NewUser and the named new-user parameters are all optional individually (validated at runtime instead)' {
         (Get-Command Copy-EntraUser).Parameters['TemplateUserId'].Attributes.Mandatory | Should -Contain $true
-        (Get-Command Copy-EntraUser).Parameters['NewUser'].Attributes.Mandatory | Should -Contain $true
+        (Get-Command Copy-EntraUser).Parameters['NewUser'].Attributes.Mandatory | Should -Not -Contain $true
+        (Get-Command Copy-EntraUser).Parameters['NewUserPrincipalName'].Attributes.Mandatory | Should -Not -Contain $true
         (Get-Command Copy-EntraUser).Parameters['TenantId'].Attributes.Mandatory | Should -Not -Contain $true
         (Get-Command Copy-EntraUser).Parameters['ClientId'].Attributes.Mandatory | Should -Not -Contain $true
     }
@@ -134,6 +136,96 @@ Describe 'Copy-EntraUser' {
 
         Should -Invoke Connect-EntraGraphSession -Times 1 -ModuleName $script:dscModuleName -ParameterFilter {
             $CertificateThumbprint -eq 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' -and $null -eq $CertificatePath
+        }
+    }
+
+    Context 'Creating a new user via named parameters' {
+        It 'Throws an actionable error when neither -NewUser nor -NewUserPrincipalName is supplied' {
+            { Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' -Confirm:$false } |
+                Should -Throw '*NewUser*NewUserPrincipalName*'
+        }
+
+        It 'Throws an actionable error when both -NewUser and -NewUserPrincipalName are supplied' {
+            {
+                Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' -NewUser 'b@contoso.onmicrosoft.com' `
+                    -NewUserPrincipalName 'c@contoso.onmicrosoft.com' -NewUserDisplayName 'C' -NewUserMailNickname 'c' `
+                    -Confirm:$false
+            } | Should -Throw '*not both*'
+        }
+
+        It 'Throws when -NewUser is combined with a named companion parameter other than -NewUserPrincipalName (e.g. -NewUserPassword silently dropped)' {
+            $securePassword = ConvertTo-SecureString -String 'Should-Never-Be-Silently-Dropped' -AsPlainText -Force
+            {
+                Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' -NewUser 'b@contoso.onmicrosoft.com' `
+                    -NewUserPassword $securePassword -Confirm:$false
+            } | Should -Throw '*not both*'
+        }
+
+        It 'Throws when -NewUser is combined with -NewUserAccountEnabled' {
+            {
+                Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' -NewUser 'b@contoso.onmicrosoft.com' `
+                    -NewUserAccountEnabled:$false -Confirm:$false
+            } | Should -Throw '*not both*'
+        }
+
+        It 'Builds the hashtable passed to Resolve-EntraNewUser from the named parameters, auto-generating a password when omitted' {
+            Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' `
+                -NewUserPrincipalName 'new.hire@contoso.onmicrosoft.com' `
+                -NewUserDisplayName 'New Hire' `
+                -NewUserMailNickname 'new.hire' `
+                -Confirm:$false
+
+            Should -Invoke New-EntraUserPassword -Times 1 -ModuleName $script:dscModuleName
+            Should -Invoke Resolve-EntraNewUser -Times 1 -ModuleName $script:dscModuleName -ParameterFilter {
+                $NewUser.DisplayName -eq 'New Hire' -and
+                $NewUser.UserPrincipalName -eq 'new.hire@contoso.onmicrosoft.com' -and
+                $NewUser.MailNickname -eq 'new.hire' -and
+                $NewUser.AccountEnabled -eq $true -and
+                $NewUser.PasswordProfile.Password -eq 'AutoGenPlaceholder1' -and
+                $NewUser.PasswordProfile.ForceChangePasswordNextSignIn -eq $true
+            }
+        }
+
+        It 'Uses the supplied -NewUserPassword instead of generating one' {
+            $suppliedPassword = ConvertTo-SecureString -String 'Supplied-Placeholder1' -AsPlainText -Force
+
+            Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' `
+                -NewUserPrincipalName 'new.hire@contoso.onmicrosoft.com' `
+                -NewUserDisplayName 'New Hire' `
+                -NewUserMailNickname 'new.hire' `
+                -NewUserPassword $suppliedPassword `
+                -Confirm:$false
+
+            Should -Invoke New-EntraUserPassword -Times 0 -ModuleName $script:dscModuleName
+            Should -Invoke Resolve-EntraNewUser -Times 1 -ModuleName $script:dscModuleName -ParameterFilter {
+                $NewUser.PasswordProfile.Password -eq 'Supplied-Placeholder1'
+            }
+        }
+
+        It 'Defaults -NewUserAccountEnabled to $true and honors an explicit $false' {
+            Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' `
+                -NewUserPrincipalName 'new.hire@contoso.onmicrosoft.com' `
+                -NewUserDisplayName 'New Hire' `
+                -NewUserMailNickname 'new.hire' `
+                -NewUserAccountEnabled:$false `
+                -Confirm:$false
+
+            Should -Invoke Resolve-EntraNewUser -Times 1 -ModuleName $script:dscModuleName -ParameterFilter {
+                $NewUser.AccountEnabled -eq $false
+            }
+        }
+
+        It 'Never writes the generated or supplied password to any output stream' {
+            $suppliedPassword = ConvertTo-SecureString -String 'Should-Never-Appear-1' -AsPlainText -Force
+
+            $allOutput = Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' `
+                -NewUserPrincipalName 'new.hire@contoso.onmicrosoft.com' `
+                -NewUserDisplayName 'New Hire' `
+                -NewUserMailNickname 'new.hire' `
+                -NewUserPassword $suppliedPassword `
+                -Confirm:$false -Verbose *>&1 | Out-String
+
+            $allOutput | Should -Not -Match 'Should-Never-Appear-1'
         }
     }
 

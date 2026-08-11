@@ -35,6 +35,12 @@ The `-NewUser` parameter accepts two input types:
 
 The function validates the hashtable structure at runtime and fails fast with a clear error if required keys are missing.
 
+### Named Parameters as an Alternative to the Hashtable
+
+`Copy-EntraUser` also accepts `-NewUserPrincipalName`, `-NewUserDisplayName`, `-NewUserMailNickname`, `-NewUserPassword`, and `-NewUserAccountEnabled` as an alternative way to specify the "create a new user" case, so operators don't have to hand-build a hashtable (and, in particular, don't have to hand-roll a password-generation one-liner). `-NewUser` and `-NewUserPrincipalName` are mutually exclusive, validated at runtime with an actionable error (rather than via PowerShell parameter sets, which would require a combinatorial explosion of set names given the existing Thumbprint/CertificateFile/Interactive auth-mode axis already occupying the parameter-set dimension) — exactly one of the two styles must be supplied.
+
+If `-NewUserPassword` is omitted, `Copy-EntraUser` calls the new `New-EntraUserPassword` private helper (the same CSPRNG approach used in the module's own `.EXAMPLE` blocks) to generate one, and sets `ForceChangePasswordNextSignIn = $true` on the created account so the generated password only ever needs to work for a single first sign-in. The generated (or supplied) password is never written to any output stream (Write-Verbose/Warning/Error/Information) — it is unwrapped from its SecureString only at the point of building the Graph API request body. This means the module itself never discloses an auto-generated password back to the operator; retrieving or resetting the new user's credential is left to a separate, deliberate flow (Entra's Temporary Access Pass, self-service password reset, or an admin-initiated password reset) rather than the module printing a secret to a stream that might be captured in a transcript or CI log. This is a deliberate security-over-convenience tradeoff, not an oversight.
+
 ## Microsoft Graph Permissions
 
 ### Permission Name Correction

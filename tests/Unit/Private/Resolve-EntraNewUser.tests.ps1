@@ -103,4 +103,36 @@ Describe 'Resolve-EntraNewUser' {
             }
         }
     }
+
+    Context 'Hashtable supplied, PasswordProfile.Password is empty or missing (defense in depth)' {
+        It 'Throws before ever calling New-MgUser when Password is an empty string' {
+            InModuleScope -ModuleName $script:dscModuleName {
+                Mock Get-MgUser { $null } -ParameterFilter { $Filter }
+                Mock New-MgUser { }
+
+                $newUser = @{
+                    DisplayName = 'New Hire'; UserPrincipalName = 'new.hire@contoso.onmicrosoft.com'
+                    MailNickname = 'new.hire'; PasswordProfile = @{ Password = '' }
+                    AccountEnabled = $true
+                }
+                { Resolve-EntraNewUser -NewUser $newUser -Confirm:$false } | Should -Throw '*Password*'
+                Should -Invoke New-MgUser -Times 0
+            }
+        }
+
+        It 'Throws before ever calling New-MgUser when Password is missing entirely' {
+            InModuleScope -ModuleName $script:dscModuleName {
+                Mock Get-MgUser { $null } -ParameterFilter { $Filter }
+                Mock New-MgUser { }
+
+                $newUser = @{
+                    DisplayName = 'New Hire'; UserPrincipalName = 'new.hire@contoso.onmicrosoft.com'
+                    MailNickname = 'new.hire'; PasswordProfile = @{}
+                    AccountEnabled = $true
+                }
+                { Resolve-EntraNewUser -NewUser $newUser -Confirm:$false } | Should -Throw '*Password*'
+                Should -Invoke New-MgUser -Times 0
+            }
+        }
+    }
 }

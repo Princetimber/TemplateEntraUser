@@ -29,7 +29,31 @@ function Copy-EntraUser {
         Either the UPN/ObjectId of a pre-existing target user (pipeline
         input supported), or a hashtable of properties (DisplayName,
         UserPrincipalName, MailNickname, PasswordProfile, AccountEnabled)
-        for a user to be created.
+        for a user to be created. Mutually exclusive with -NewUserPrincipalName
+        and its companion parameters below -- specify one style or the other,
+        not both.
+    .PARAMETER NewUserPrincipalName
+        The UserPrincipalName for a new user to be created, specified
+        alongside -NewUserDisplayName and -NewUserMailNickname instead of
+        building a -NewUser hashtable by hand. Mutually exclusive with
+        -NewUser.
+    .PARAMETER NewUserDisplayName
+        The new user's display name. Required together with
+        -NewUserPrincipalName.
+    .PARAMETER NewUserMailNickname
+        The new user's mail nickname. Required together with
+        -NewUserPrincipalName.
+    .PARAMETER NewUserPassword
+        SecureString password for the new user. If omitted, a random
+        password is generated via New-EntraUserPassword (a CSPRNG) and is
+        never written to any output stream -- the operator must retrieve or
+        reset the new user's password through a separate flow (e.g. Entra's
+        Temporary Access Pass, self-service password reset, or an admin
+        password reset) since it cannot be recovered from this function's
+        output. The generated password sets ForceChangePasswordNextSignIn,
+        so it only ever needs to work for a single first sign-in.
+    .PARAMETER NewUserAccountEnabled
+        Whether the newly created account is enabled. Defaults to $true.
     .PARAMETER TenantId
         The Entra ID tenant ID (GUID) to connect to. Required when a
         certificate parameter is supplied; optional for interactive-only
@@ -92,14 +116,37 @@ function Copy-EntraUser {
         # from the start, with no certificate-based attempt or fallback warning.
         Copy-EntraUser -TemplateUserId 'template.user@contoso.onmicrosoft.com' `
             -NewUser 'new.hire@contoso.onmicrosoft.com'
+    .EXAMPLE
+        # Create a new user via named parameters instead of hand-building a
+        # -NewUser hashtable. No password supplied, so one is generated
+        # automatically and never displayed -- retrieve/reset it separately.
+        Copy-EntraUser -TemplateUserId 'template.user@contoso.onmicrosoft.com' `
+            -NewUserPrincipalName 'new.hire@contoso.onmicrosoft.com' `
+            -NewUserDisplayName 'New Hire' `
+            -NewUserMailNickname 'new.hire'
     #>
     [CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Interactive')]
     param(
         [Parameter(Mandatory)]
         [string] $TemplateUserId,
 
-        [Parameter(Mandatory, ValueFromPipeline)]
+        [Parameter(ValueFromPipeline)]
         [object] $NewUser,
+
+        [Parameter()]
+        [string] $NewUserPrincipalName,
+
+        [Parameter()]
+        [string] $NewUserDisplayName,
+
+        [Parameter()]
+        [string] $NewUserMailNickname,
+
+        [Parameter()]
+        [securestring] $NewUserPassword,
+
+        [Parameter()]
+        [bool] $NewUserAccountEnabled = $true,
 
         [Parameter()]
         [string] $TenantId,
@@ -119,6 +166,38 @@ function Copy-EntraUser {
 
     process {
         Test-RequiredGraphModule
+
+        $newUserCompanionParameter = @('NewUserPrincipalName', 'NewUserDisplayName', 'NewUserMailNickname', 'NewUserPassword', 'NewUserAccountEnabled')
+        $suppliedNewUser = $PSBoundParameters.ContainsKey('NewUser')
+        $suppliedAnyNewUserCompanion = [bool]($newUserCompanionParameter | Where-Object { $PSBoundParameters.ContainsKey($_) })
+        $suppliedNewUserPrincipalName = $PSBoundParameters.ContainsKey('NewUserPrincipalName')
+
+        if ($suppliedNewUser -and $suppliedAnyNewUserCompanion) {
+            throw 'Specify either -NewUser or -NewUserPrincipalName (with -NewUserDisplayName, -NewUserMailNickname, and optionally -NewUserPassword/-NewUserAccountEnabled), not both.'
+        }
+        if (-not $suppliedNewUser -and -not $suppliedNewUserPrincipalName) {
+            throw 'You must supply either -NewUser (an existing user identifier or a properties hashtable) or -NewUserPrincipalName (with -NewUserDisplayName and -NewUserMailNickname) to create a new user.'
+        }
+
+        if ($suppliedNewUserPrincipalName) {
+            if (-not $NewUserDisplayName -or -not $NewUserMailNickname) {
+                throw '-NewUserDisplayName and -NewUserMailNickname are both required alongside -NewUserPrincipalName.'
+            }
+
+            $securePassword = if ($PSBoundParameters.ContainsKey('NewUserPassword')) { $NewUserPassword } else { New-EntraUserPassword }
+            $plainPassword = [System.Net.NetworkCredential]::new('', $securePassword).Password
+
+            $NewUser = @{
+                DisplayName       = $NewUserDisplayName
+                UserPrincipalName = $NewUserPrincipalName
+                MailNickname      = $NewUserMailNickname
+                PasswordProfile   = @{
+                    Password                      = $plainPassword
+                    ForceChangePasswordNextSignIn = $true
+                }
+                AccountEnabled    = $NewUserAccountEnabled
+            }
+        }
 
         $connectParams = @{}
         if ($TenantId) { $connectParams['TenantId'] = $TenantId }

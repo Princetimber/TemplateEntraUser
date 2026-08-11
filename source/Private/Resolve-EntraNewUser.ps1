@@ -40,6 +40,14 @@ function Resolve-EntraNewUser {
         }
     }
 
+    # Defense in depth: never let an empty/missing Password reach New-MgUser.
+    # A caller-side bug (or a declined confirmation somewhere upstream) that
+    # produces a blank password must fail loudly here, not create an account
+    # nobody can sign in to.
+    if ([string]::IsNullOrEmpty($NewUser.PasswordProfile.Password)) {
+        throw "The -NewUser hashtable's PasswordProfile.Password is empty or missing."
+    }
+
     if ($NewUser.UserPrincipalName -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') {
         throw "The -NewUser hashtable's UserPrincipalName '$($NewUser.UserPrincipalName)' is not a valid UPN."
     }
