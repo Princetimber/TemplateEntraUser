@@ -5,6 +5,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `Copy-EntraUser`'s `-TenantId` and `-ClientId` parameters are no longer
+  mandatory. When no certificate parameter (`-CertificateThumbprint` or
+  `-CertificatePath`/`-CertificatePassword`) is supplied at all, the
+  function now connects to Microsoft Graph interactively from the start —
+  no certificate-based attempt is made and no fallback warning is emitted,
+  since there is nothing to fall back from. `-TenantId`/`-ClientId` remain
+  optional in this mode and are passed through to the interactive sign-in
+  only when supplied. Certificate-based auth (either parameter set) still
+  requires both `-TenantId` and `-ClientId`, now enforced with an explicit,
+  actionable error at the start of `Connect-EntraGraphSession` rather than
+  relying on mandatory-parameter prompting.
+
 ### Fixed
 
 - Removed the broken project-level `PostToolUse` ScriptAnalyzer hook from

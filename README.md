@@ -33,20 +33,27 @@ Invoke-ScriptAnalyzer -Path source/ -Recurse
 
 ## Authentication
 
-The `Copy-EntraUser` function authenticates via **certificate-based app-only authentication (CBA)** by default, falling back automatically to **interactive delegated sign-in** if certificate-based auth cannot be established.
+The `Copy-EntraUser` function authenticates via **certificate-based app-only authentication (CBA)** when you supply a certificate, falling back automatically to **interactive delegated sign-in** if certificate-based auth cannot be established. If you don't supply a certificate at all — for example, no app registration exists yet — it connects **interactively from the start**, with no certificate-based attempt and no fallback warning.
 
 ### Authentication Parameters
 
-Two parameter sets are available via `Connect-EntraGraphSession`:
+Three modes are available via `Connect-EntraGraphSession`:
 
-1. **Portable PFX File** (recommended, default)
+1. **Portable PFX File** (recommended for certificate-based auth)
+   - `-TenantId`, `-ClientId` — required alongside a certificate
    - `-CertificatePath` — Path to a PFX certificate file
    - `-CertificatePassword` — SecureString password protecting the PFX file
    - Works identically on **Windows, macOS, and Linux**
 
 2. **Certificate Thumbprint** (Windows-only convenience)
+   - `-TenantId`, `-ClientId` — required alongside a certificate
    - `-CertificateThumbprint` — Thumbprint of a certificate already in the Windows certificate store
    - Not portable to macOS or Linux
+
+3. **Interactive sign-in, no certificate** (default when no certificate parameter is supplied)
+   - Omit `-CertificateThumbprint`, `-CertificatePath`, and `-CertificatePassword` entirely
+   - `-TenantId` and `-ClientId` are both optional here — when omitted, `Connect-MgGraph` resolves the tenant from the signing-in account and uses its own default client registration
+   - Useful when you don't yet have (or don't want to set up) an app registration and certificate
 
 ### Fallback Behavior
 
@@ -56,7 +63,9 @@ If certificate-based authentication fails for any reason (missing certificate, e
 Certificate-based authentication failed (...); falling back to interactive delegated sign-in.
 ```
 
-Interactive sign-in requests explicit scopes from `Get-RequiredGraphPermission` — never relying on previously cached consent.
+If no certificate parameter was supplied in the first place, there is nothing to fall back from — the function goes straight to interactive sign-in and this warning is never shown.
+
+Interactive sign-in (whether reached via fallback or directly) requests explicit scopes from `Get-RequiredGraphPermission` — never relying on previously cached consent.
 
 ## Required Graph Permissions
 
@@ -189,6 +198,26 @@ Copy-EntraUser `
 - Interactive sign-in explicitly requests the three required scopes (not relying on cached consent)
 - Creates the new user with the properties specified in the hashtable
 - Clones the template user's group memberships and PIM eligibility to the newly created account
+
+### Example 3: Interactive Sign-In, No Certificate
+
+Use this when you don't have (or don't want to set up) an app registration and certificate yet — omit every certificate parameter and the function connects interactively from the start:
+
+```powershell
+Copy-EntraUser -TemplateUserId 'template.user@contoso.onmicrosoft.com' -NewUser 'new.hire@contoso.onmicrosoft.com'
+```
+
+**What happens:**
+- No certificate-based attempt is made at all, and no fallback warning is shown — there's nothing to fall back from
+- The function connects interactively, prompting you to sign in
+- `-TenantId`/`-ClientId` are optional here; supply `-TenantId` if you want to restrict sign-in to a specific tenant, e.g.:
+  ```powershell
+  Copy-EntraUser -TemplateUserId 'template.user@contoso.onmicrosoft.com' -NewUser 'new.hire@contoso.onmicrosoft.com' `
+      -TenantId '00000000-0000-0000-0000-000000000000'
+  ```
+  Only supply `-ClientId` here if you have a separate app registration configured for **delegated** (interactive) sign-in with the required scopes consented — the same app registration used for certificate-based auth is typically confidential-client-only and will not work for interactive sign-in.
+- Interactive sign-in explicitly requests the three required scopes (not relying on cached consent)
+- Clones the template user's group memberships and PIM eligibility to the target user
 
 ## How Copy-EntraUser Works
 
