@@ -170,7 +170,7 @@ Copy-EntraUser `
         DisplayName = 'New Hire'
         UserPrincipalName = 'new.hire@contoso.onmicrosoft.com'
         MailNickname = 'new.hire'
-        PasswordProfile = @{ Password = [System.Web.Security.Membership]::GeneratePassword(16, 4) }
+        PasswordProfile = @{ Password = -join (1..16 | ForEach-Object { $c = [char[]](48..57 + 65..90 + 97..122 + 33 + 35 + 36 + 37); $c[[System.Security.Cryptography.RandomNumberGenerator]::GetInt32(0, $c.Length)] }) }
         AccountEnabled = $true
     } `
     -TenantId '00000000-0000-0000-0000-000000000000' `
