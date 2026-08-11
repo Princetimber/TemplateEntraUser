@@ -65,4 +65,42 @@ Describe 'Resolve-EntraNewUser' {
             }
         }
     }
+
+    Context 'Hashtable supplied, UserPrincipalName contains a single quote (OData filter injection)' {
+        It 'Doubles the embedded quote in the -Filter string passed to Get-MgUser rather than breaking out of the literal' {
+            InModuleScope -ModuleName $script:dscModuleName {
+                Mock Get-MgUser { [pscustomobject]@{ Id = '00000000-0000-0000-0000-000000000005' } } -ParameterFilter {
+                    $Filter -eq "userPrincipalName eq 'o''malley@contoso.onmicrosoft.com'"
+                }
+                Mock New-MgUser { }
+
+                $newUser = @{
+                    DisplayName = "O'Malley"; UserPrincipalName = "o'malley@contoso.onmicrosoft.com"
+                    MailNickname = 'omalley'; PasswordProfile = @{ Password = 'placeholder' }
+                    AccountEnabled = $true
+                }
+                Resolve-EntraNewUser -NewUser $newUser -Confirm:$false | Out-Null
+
+                Should -Invoke Get-MgUser -Times 1 -ParameterFilter {
+                    $Filter -eq "userPrincipalName eq 'o''malley@contoso.onmicrosoft.com'"
+                }
+            }
+        }
+    }
+
+    Context 'Hashtable supplied, UserPrincipalName is not a plausible UPN shape' {
+        It 'Throws before ever calling Get-MgUser' {
+            InModuleScope -ModuleName $script:dscModuleName {
+                Mock Get-MgUser { }
+
+                $newUser = @{
+                    DisplayName = 'New Hire'; UserPrincipalName = 'not-a-upn'
+                    MailNickname = 'new.hire'; PasswordProfile = @{ Password = 'placeholder' }
+                    AccountEnabled = $true
+                }
+                { Resolve-EntraNewUser -NewUser $newUser -Confirm:$false } | Should -Throw '*UserPrincipalName*'
+                Should -Invoke Get-MgUser -Times 0
+            }
+        }
+    }
 }

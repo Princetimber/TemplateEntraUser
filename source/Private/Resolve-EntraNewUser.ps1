@@ -40,7 +40,15 @@ function Resolve-EntraNewUser {
         }
     }
 
-    $existing = Get-MgUser -Filter "userPrincipalName eq '$($NewUser.UserPrincipalName)'" -ErrorAction Stop
+    if ($NewUser.UserPrincipalName -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') {
+        throw "The -NewUser hashtable's UserPrincipalName '$($NewUser.UserPrincipalName)' is not a valid UPN."
+    }
+
+    # OData string literals delimit on a single quote; double any embedded
+    # quote so a UPN containing one cannot break out of the filter literal
+    # and redirect the lookup to a different principal.
+    $escapedUpn = $NewUser.UserPrincipalName.Replace("'", "''")
+    $existing = Get-MgUser -Filter "userPrincipalName eq '$escapedUpn'" -ErrorAction Stop
     if ($existing) {
         Write-Verbose "New user '$($NewUser.UserPrincipalName)' already exists (Id=$($existing.Id)); skipping creation."
         return $existing
