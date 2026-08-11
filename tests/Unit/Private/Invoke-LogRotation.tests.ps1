@@ -1,7 +1,7 @@
 #Requires -Version 7.0
 
 BeforeAll {
-    $script:dscModuleName = 'TemplateModule'
+    $script:dscModuleName = 'Copy-EntraUser'
 
     Import-Module -Name $script:dscModuleName
 }

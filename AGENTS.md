@@ -4,7 +4,7 @@ Universal context for AI agents (Cursor, Copilot, Claude, etc.) working in this 
 
 ## Project
 
-**{{MODULE_NAME}}** — a PowerShell module built with the [Sampler](https://github.com/gaelcolas/Sampler) framework.
+**Copy-EntraUser** — a PowerShell module built with the [Sampler](https://github.com/gaelcolas/Sampler) framework.
 Target runtime: **PowerShell 7.0+**.
 
 ## Build / Test / Lint
@@ -39,8 +39,8 @@ source/
   Public/           # Exported functions (one per file)
   Private/          # Internal helpers (one per file)
   en-US/            # Help files
-  TemplateModule.psm1   # Root module (dot-sources Public/ and Private/)
-  TemplateModule.psd1   # Module manifest
+  Copy-EntraUser.psm1   # Root module (dot-sources Public/ and Private/)
+  Copy-EntraUser.psd1   # Module manifest
 tests/
   QA/               # ScriptAnalyzer compliance, changelog, help quality
     module.tests.ps1
@@ -104,7 +104,7 @@ tests/
 #Requires -Version 7.0
 
 BeforeAll {
-    $script:dscModuleName = 'TemplateModule'
+    $script:dscModuleName = 'Copy-EntraUser'
     Import-Module -Name $script:dscModuleName
 }
 

@@ -31,26 +31,6 @@ Describe 'Repository contracts' -Tag 'QA' {
         }
     }
 
-    Context 'Template initialization' {
-        BeforeAll {
-            $script:initializerContent = Get-Content -Path (
-                Join-Path $script:projectPath 'Initialize-Template.ps1'
-            ) -Raw
-        }
-
-        It 'Uses literal replacement for fixed template tokens' {
-            $script:initializerContent | Should -Match '\$content\.Replace\(\$key, \$replacements\[\$key\]\)'
-            $script:initializerContent | Should -Not -Match '-replace\s+\[regex\]::Escape\(\$key\)'
-        }
-
-        It 'Escapes apostrophes before writing secrets to PowerShell source' {
-            $script:initializerContent | Should -Match '\$escapedGalleryApiKey\s*=\s*\$GalleryApiKey\.Replace\("''", "''''"\)'
-            $script:initializerContent | Should -Match '\$escapedGitHubToken\s*=\s*\$GitHubToken\.Replace\("''", "''''"\)'
-            $script:initializerContent | Should -Match '\$env:PSGALLERY_API_KEY = ''\$escapedGalleryApiKey'''
-            $script:initializerContent | Should -Match '\$env:GITHUB_TOKEN = ''\$escapedGitHubToken'''
-        }
-    }
-
     Context 'Source layout' {
         It 'Contains a function matching each private script filename' {
             $privateScripts = Get-ChildItem -Path (
@@ -79,7 +59,7 @@ Describe 'Repository contracts' -Tag 'QA' {
             $tokens = $null
             $parseErrors = $null
             $moduleAst = [System.Management.Automation.Language.Parser]::ParseFile(
-                (Join-Path $script:projectPath 'source/TemplateModule.psm1'),
+                (Join-Path $script:projectPath 'source/Copy-EntraUser.psm1'),
                 [ref] $tokens,
                 [ref] $parseErrors
             )
@@ -99,9 +79,28 @@ Describe 'Repository contracts' -Tag 'QA' {
                 Join-Path $script:projectPath 'source/Private/Write-ToLog.ps1'
             ) -Raw
 
-            $loggerContent | Should -Match 'TemplateModule_\$\('
-            $loggerContent | Should -Match 'Global\\TemplateModuleLog'
+            $loggerContent | Should -Match 'Copy-EntraUser_\$\('
+            $loggerContent | Should -Match 'Global\\Copy-EntraUserLog'
             $loggerContent | Should -Not -Match 'Invoke-ADDSDomainController'
+        }
+    }
+
+    Context 'Permission documentation drift' {
+        It 'Copy-EntraUser.NOTES documents every permission Get-RequiredGraphPermission returns' {
+            . (Join-Path $script:projectPath 'source/Private/Get-RequiredGraphPermission.ps1')
+            # NOTE: Get-Help against the raw .ps1 *path* only ever surfaces comment-based
+            # help attached to the file's top-level ScriptBlockAst. This file's help is
+            # attached to the nested FunctionDefinitionAst (Copy-EntraUser is a
+            # "one function per file" script, per the Sampler dot-sourcing convention),
+            # so the script must be dot-sourced and help retrieved by function name
+            # instead -- confirmed via (Get-Command <path>).ScriptBlock.Ast.GetHelpContent()
+            # returning $null for path-based lookups against function-wrapped scripts.
+            . (Join-Path $script:projectPath 'source/Public/Copy-EntraUser.ps1')
+            $notes = (Get-Help Copy-EntraUser).AlertSet.Alert.Text
+
+            foreach ($permission in Get-RequiredGraphPermission) {
+                $notes | Should -Match ([regex]::Escape($permission))
+            }
         }
     }
 }

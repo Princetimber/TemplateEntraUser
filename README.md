@@ -1,6 +1,6 @@
-# {{MODULE_NAME}}
+# Copy-EntraUser
 
-A production-ready PowerShell module template built with the [Sampler](https://github.com/gaelcolas/Sampler) framework. This template provides standardized patterns, comprehensive testing, and CI/CD integration to accelerate your PowerShell module development.
+A production-ready PowerShell module, built with the [Sampler](https://github.com/gaelcolas/Sampler) framework, that clones an Entra ID user's direct group memberships and PIM-for-Groups eligible assignments onto a new or existing user — mirroring the template user's access tier without ever granting a permanent membership where the template only held PIM eligibility.
 
 ## Features
 
@@ -9,29 +9,10 @@ A production-ready PowerShell module template built with the [Sampler](https://g
 - **Comprehensive Testing** - Pester v5+ with 85% code coverage threshold, QA tests for ScriptAnalyzer compliance
 - **CI/CD Integration** - Pre-configured GitHub Actions and Azure Pipelines workflows
 - **Example Functions** - Working examples demonstrating correct patterns (read-only vs state-changing)
-- **Quick Setup** - Interactive `Initialize-Template.ps1` script for rapid customization
 
 ## Quick Start
 
-### 1. Create Your Module from Template
-
-```powershell
-# Clone or download this repository
-git clone <your-template-repo-url> MyNewModule
-cd MyNewModule
-
-# Run the initialization script
-./Initialize-Template.ps1
-```
-
-The init script will prompt you for:
-- **Module Name** (e.g., `Invoke-MyModule`) - validates approved Verb-Noun pattern
-- **Description** - what your module does
-- **Author** - your name
-- **Company** - your organization
-- **GUID** - auto-generated if not provided
-
-### 2. Build Your Module
+The `Copy-EntraUser` module is already instantiated. To build and import it:
 
 ```powershell
 # First build (resolves dependencies)
@@ -43,26 +24,66 @@ The init script will prompt you for:
 # Run tests
 ./build.ps1 -tasks test
 
+# Import the module
+Import-Module ./output/module/Copy-EntraUser
+
 # Lint
 Invoke-ScriptAnalyzer -Path source/ -Recurse
 ```
 
-### 3. Add Your Functions
+## Authentication
 
-```powershell
-# Add a public function
-New-Item -Path source/Public/Get-MyData.ps1 -ItemType File
+The `Copy-EntraUser` function authenticates via **certificate-based app-only authentication (CBA)** by default, falling back automatically to **interactive delegated sign-in** if certificate-based auth cannot be established.
 
-# Add corresponding test
-New-Item -Path tests/Unit/Public/Get-MyData.tests.ps1 -ItemType File
+### Authentication Parameters
+
+Two parameter sets are available via `Connect-EntraGraphSession`:
+
+1. **Portable PFX File** (recommended, default)
+   - `-CertificatePath` — Path to a PFX certificate file
+   - `-CertificatePassword` — SecureString password protecting the PFX file
+   - Works identically on **Windows, macOS, and Linux**
+
+2. **Certificate Thumbprint** (Windows-only convenience)
+   - `-CertificateThumbprint` — Thumbprint of a certificate already in the Windows certificate store
+   - Not portable to macOS or Linux
+
+### Fallback Behavior
+
+If certificate-based authentication fails for any reason (missing certificate, expired certificate, module not installed, or API errors), the function automatically falls back to interactive delegated sign-in with an **explicit warning**:
+
+```
+Certificate-based authentication failed (...); falling back to interactive delegated sign-in.
 ```
 
-Follow the patterns in `Get-Greeting.ps1` (read-only) and `Export-Greeting.ps1` (state-changing with ShouldProcess).
+Interactive sign-in requests explicit scopes from `Get-RequiredGraphPermission` — never relying on previously cached consent.
+
+## Required Graph Permissions
+
+The `Copy-EntraUser` function requires three Microsoft Graph permissions. Both application permissions (CBA) and delegated scopes (interactive fallback) use the same set:
+
+### Application Permissions (Certificate-Based Auth)
+
+| Permission | Description |
+|-----------|-------------|
+| `User.ReadWrite.All` | Read and write all user properties and group memberships |
+| `GroupMember.ReadWrite.All` | Read and write group membership for all groups |
+| `PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup` | Read and write PIM-for-Groups eligibility schedule assignments |
+
+### Delegated Scopes (Interactive Auth)
+
+| Scope | Description |
+|-------|-------------|
+| `User.ReadWrite.All` | Read and write all user properties and group memberships |
+| `GroupMember.ReadWrite.All` | Read and write group membership for all groups |
+| `PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup` | Read and write PIM-for-Groups eligibility schedule assignments |
+
+> **Note:** Both tables list the exact same three permissions. The source of truth is the `Get-RequiredGraphPermission` function, which ensures both CBA and interactive auth paths remain in sync and cannot drift.
 
 ## Directory Structure
 
 ```
-{{MODULE_NAME}}/
+Copy-EntraUser/
 ├── .github/
 │   ├── copilot-instructions.md           # GitHub Copilot instructions
 │   └── workflows/
@@ -71,44 +92,39 @@ Follow the patterns in `Get-Greeting.ps1` (read-only) and `Export-Greeting.ps1` 
 ├── .vscode/
 │   └── tasks.json                        # VS Code build/test tasks
 ├── source/
-│   ├── {{MODULE_NAME}}.psd1              # Module manifest
-│   ├── {{MODULE_NAME}}.psm1              # Root module (dot-sources functions)
+│   ├── Copy-EntraUser.psd1              # Module manifest
+│   ├── Copy-EntraUser.psm1              # Root module (dot-sources functions)
 │   ├── en-US/
-│   │   └── about_{{MODULE_NAME}}.help.txt # About help file
-│   ├── Public/                           # Exported functions (one per file)
-│   │   ├── Get-Greeting.ps1              # Example read-only function
-│   │   └── Export-Greeting.ps1           # Example state-changing function
+│   │   └── about_Copy-EntraUser.help.txt # About help file
+│   ├── Public/
+│   │   └── Copy-EntraUser.ps1           # The exported cmdlet: orchestrates the whole clone
 │   └── Private/                          # Internal helpers (one per file)
-│       ├── Format-GreetingMessage.ps1    # Example private function
-│       ├── Write-ToLog.ps1              # Thread-safe logger (core entry point)
-│       ├── Clear-LogFile.ps1            # Clears the active log (archive option)
-│       ├── Get-LogFilePath.ps1          # Returns current log file path
-│       ├── Get-LogFileSize.ps1          # Returns log file size in bytes
-│       ├── Invoke-LogRotation.ps1       # Rotates numbered log backups
-│       ├── Set-LogFilePath.ps1          # Sets the module-scoped log path
-│       └── Write-ErrorLog.ps1           # ErrorRecord convenience wrapper
+│       ├── Connect-EntraGraphSession.ps1        # CBA connect, auto-falls back to interactive
+│       ├── Resolve-EntraTemplateUser.ps1        # Resolves the template user by UPN/ObjectId
+│       ├── Resolve-EntraNewUser.ps1             # Resolves/creates the target user (idempotent)
+│       ├── Get-EntraTemplateGroupMembership.ps1 # Reads direct memberships + PIM eligibility
+│       ├── Split-EntraGroupMembership.ps1       # Pure partition: Plain / Pim / Unsupported
+│       ├── Add-EntraGroupMembership.ps1         # Idempotent direct membership write
+│       ├── Grant-EntraGroupEligibility.ps1      # Idempotent PIM-for-Groups eligibility grant
+│       ├── Get-RequiredGraphPermission.ps1      # Single source of truth for required scopes
+│       ├── Test-RequiredGraphModule.ps1         # Verifies Microsoft.Graph sub-modules are present
+│       └── Write-ToLog.ps1                      # Thread-safe logger used across the module
 ├── tests/
 │   ├── QA/
-│   │   └── module.tests.ps1              # ScriptAnalyzer, changelog, help tests
-│   └── Unit/
-│       ├── Public/
-│       │   ├── Get-Greeting.tests.ps1
-│       │   └── Export-Greeting.tests.ps1
-│       └── Private/
-│           ├── Format-GreetingMessage.tests.ps1
-│           ├── Write-ToLog.tests.ps1
-│           ├── Clear-LogFile.tests.ps1
-│           ├── Get-LogFilePath.tests.ps1
-│           ├── Get-LogFileSize.tests.ps1
-│           ├── Invoke-LogRotation.tests.ps1
-│           ├── Set-LogFilePath.tests.ps1
-│           └── Write-ErrorLog.tests.ps1
+│   │   ├── module.tests.ps1              # ScriptAnalyzer, changelog, help tests
+│   │   └── repository.tests.ps1          # Repository-level hygiene checks
+│   ├── Unit/
+│   │   ├── Public/
+│   │   │   └── Copy-EntraUser.tests.ps1
+│   │   └── Private/                      # One test file per helper above
+│   └── Integration/
+│       └── Copy-EntraUser.Idempotency.tests.ps1  # Full-chain, zero-mutation-on-rerun proof
+├── ASSUMPTIONS.md                        # Decisions register for this instantiation
 ├── azure-pipelines.yml                   # Azure Pipelines (multi-platform, PSGallery deploy)
 ├── build.ps1                             # Sampler build bootstrap
 ├── build.yaml                            # Sampler build configuration
 ├── CHANGELOG.md                          # Keep a Changelog format
 ├── CLAUDE.md                             # Claude Code context and standards
-├── Initialize-Template.ps1               # One-time setup script (removes itself)
 ├── LICENSE                               # MIT License
 ├── README.md                             # This file
 ├── RequiredModules.psd1                  # Build dependencies (pinned version ranges)
@@ -116,40 +132,85 @@ Follow the patterns in `Get-Greeting.ps1` (read-only) and `Export-Greeting.ps1` 
 └── Resolve-Dependency.psd1               # Resolver configuration
 ```
 
-## Patterns Demonstrated
+## Usage
 
-### Get-Greeting (Read-Only Function)
+### Example 1: Certificate-Based Auth with Portable PFX File
 
-- `[CmdletBinding()]` without ShouldProcess (read-only operations don't need it)
-- Pipeline input, `PassThru` for rich object output
-- Input validation with `ValidateSet`, `ValidateNotNullOrEmpty`
-- Proper `ErrorRecord` construction with `ThrowTerminatingError`
+This example uses certificate-based app-only authentication with a portable PFX file:
 
-### Export-Greeting (State-Changing Function)
+```powershell
+# Copy template user's group memberships and PIM eligibility to a new hire
+Copy-EntraUser `
+    -TemplateUserId 'template.user@contoso.onmicrosoft.com' `
+    -NewUser 'new.hire@contoso.onmicrosoft.com' `
+    -TenantId '00000000-0000-0000-0000-000000000000' `
+    -ClientId '00000000-0000-0000-0000-000000000001' `
+    -CertificatePath ./copy-entrauser.pfx `
+    -CertificatePassword (Read-Host -AsSecureString 'Certificate password')
+```
 
-- `[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium')]` - correct use of ShouldProcess
-- `-WhatIf` and `-Confirm` support for safe file operations
-- `-Force` to overwrite, `-Append` to add to existing files
-- `-PassThru` returning `[System.IO.FileInfo]`
+**What happens:**
+- The function connects to Microsoft Graph using the certificate and client ID
+- Resolves both the template user (existing employee) and target user (new hire)
+- Enumerates the template user's direct group memberships
+- Identifies which groups are plain security groups and which are PIM-for-Groups groups
+- Adds the new hire as a direct member to all plain groups
+- Grants ELIGIBLE (not active) PIM-for-Groups assignments matching the template user's access tier (member vs owner)
+- Skips dynamic-membership and role-assignable groups with a warning
 
-### Logging Framework (Private)
+### Example 2: Interactive Fallback with User Creation
 
-Seven private functions form a production-grade, thread-safe logging system:
+This example demonstrates the interactive fallback scenario when certificate authentication fails (e.g., certificate expired or missing):
+
+```powershell
+# Create a new user and clone template user's permissions (certificate path specified
+# but unavailable; falls back to interactive auth automatically)
+Copy-EntraUser `
+    -TemplateUserId 'template.user@contoso.onmicrosoft.com' `
+    -NewUser @{
+        DisplayName = 'New Hire'
+        UserPrincipalName = 'new.hire@contoso.onmicrosoft.com'
+        MailNickname = 'new.hire'
+        PasswordProfile = @{ Password = -join (1..16 | ForEach-Object { $c = [char[]](48..57 + 65..90 + 97..122 + 33 + 35 + 36 + 37); $c[[System.Security.Cryptography.RandomNumberGenerator]::GetInt32(0, $c.Length)] }) }
+        AccountEnabled = $true
+    } `
+    -TenantId '00000000-0000-0000-0000-000000000000' `
+    -ClientId '00000000-0000-0000-0000-000000000001' `
+    -CertificatePath ./missing-or-expired.pfx `
+    -CertificatePassword (Read-Host -AsSecureString 'Certificate password')
+```
+
+**What happens:**
+- The function attempts to load the PFX certificate; if the file doesn't exist or is expired, it emits a warning:
+  ```
+  Certificate-based authentication failed (...); falling back to interactive delegated sign-in.
+  ```
+- The function then connects interactively, prompting you to sign in with your Microsoft account
+- Interactive sign-in explicitly requests the three required scopes (not relying on cached consent)
+- Creates the new user with the properties specified in the hashtable
+- Clones the template user's group memberships and PIM eligibility to the newly created account
+
+## How Copy-EntraUser Works
+
+`Copy-EntraUser` is composed of small, single-responsibility private helpers, each independently unit-tested and orchestrated by the public `Copy-EntraUser` cmdlet:
 
 | Function | Purpose |
 |----------|---------|
-| `Write-ToLog` | Core entry point. Writes timestamped entries to `$script:LogFile` under a named mutex. Supports INFO, DEBUG, WARN, ERROR, SUCCESS levels. Redacts sensitive values. ANSI colour console output with PSStyle fallback. |
-| `Clear-LogFile` | Clears the active log. `ConfirmImpact=High` — prompts unless `-Force`. `-Archive` copies a timestamped `.bak` before clearing. |
-| `Get-LogFilePath` | Returns the current module-scoped log file path for inspection or external use. |
-| `Get-LogFileSize` | Returns the log file size in bytes; returns `0` if the file does not yet exist. |
-| `Invoke-LogRotation` | Shifts numbered backups up (`.5` removed, `.4→.5`, …, current→`.1`). Called inside the `Write-ToLog` mutex — not for direct use. |
-| `Set-LogFilePath` | Sets `$script:LogFile` (and `$Global:LogFile` for backward compatibility) to an absolute path. `-Force` creates the directory. |
-| `Write-ErrorLog` | Convenience wrapper for `[ErrorRecord]` objects. Logs the message at ERROR; exception type, category, location, and inner exception at DEBUG. `-IncludeStackTrace` appends the PowerShell script stack trace. |
+| `Connect-EntraGraphSession` | Certificate-based app-only auth by default; falls back to interactive delegated sign-in (with an explicit warning) if the certificate cannot be loaded. |
+| `Resolve-EntraTemplateUser` | Resolves the template user by UPN or ObjectId. |
+| `Resolve-EntraNewUser` | Resolves an existing target user, or idempotently creates one from a supplied property hashtable (checks for an existing UPN match first). |
+| `Get-EntraTemplateGroupMembership` | Reads the template user's direct (non-transitive) group memberships and current PIM-for-Groups eligibility schedule instances; resolves the group object for any eligibility-only group not already covered by a direct membership. |
+| `Split-EntraGroupMembership` | Pure function: partitions the combined group set into `PlainGroup` (direct membership), `PimGroup` (PIM-for-Groups eligible), and `UnsupportedGroup` (dynamic-membership or role-assignable groups, skipped with a warning). |
+| `Add-EntraGroupMembership` | Idempotently adds the target user as a direct member (reads current members first, skips if already present). |
+| `Grant-EntraGroupEligibility` | Idempotently grants an ELIGIBLE (never active/permanent) PIM-for-Groups assignment mirroring the template user's access tier. |
+| `Get-RequiredGraphPermission` | Single source of truth for the required application/delegated Graph permissions, keeping both auth paths in sync. |
+| `Test-RequiredGraphModule` | Verifies the required Microsoft.Graph sub-modules are installed before connecting. |
 
 **Key design choices:**
-- All file I/O calls go through thin wrapper functions (`Add-ContentWrapper`, `Test-PathWrapper`, etc.) so Pester can mock them without touching the filesystem.
-- Auto-rotation at 10 MB keeps up to 5 numbered backups.
-- Sensitive data (passwords, tokens, keys, secrets) is redacted in key=value, JSON, and XML formats before any write.
+- Every mutating helper (`Add-EntraGroupMembership`, `Grant-EntraGroupEligibility`, `Resolve-EntraNewUser`) reads current state before writing, so re-running `Copy-EntraUser` against an already-provisioned user makes zero mutating Graph calls (see `tests/Integration/Copy-EntraUser.Idempotency.tests.ps1`).
+- `Split-EntraGroupMembership` is a pure function with no Graph calls or side effects, making the routing logic (plain vs. PIM vs. unsupported) exhaustively unit-testable in isolation.
+- A template user's PIM-for-Groups eligibility never becomes a permanent direct membership on the new user — the module always mirrors the access *tier*, never escalates it.
+- `Write-ToLog` (and its supporting private helpers) provide thread-safe, mutex-protected logging with automatic rotation and secret redaction, used across the module for diagnostics.
 
 ## CI/CD Setup
 
@@ -202,17 +263,7 @@ Two independent publish targets are available — run only the one you need:
 
 ### Step 2 — Store the credential locally (never commit it)
 
-The easiest way is to pass `-PublishTarget` to `Initialize-Template.ps1` — it creates `secrets.local.ps1` automatically with only the credential needed:
-
-```powershell
-# PSGallery only
-./Initialize-Template.ps1 -PublishTarget PSGallery
-
-# GitHub Release only
-./Initialize-Template.ps1 -PublishTarget GitHub
-```
-
-Alternatively, copy the example file and populate it manually:
+Copy the example file and populate it with your credentials:
 
 ```powershell
 Copy-Item secrets.local.ps1.example secrets.local.ps1
@@ -264,18 +315,6 @@ Invoke-Pester -CodeCoverage source/**/*.ps1
 - **QA Tests** (`tests/QA/module.tests.ps1`) - ScriptAnalyzer compliance, changelog format, help documentation quality
 - **Unit Tests** (`tests/Unit/`) - Mirrors source structure with mocked dependencies
 
-## Placeholder Reference
-
-| Placeholder | Description | Example |
-|-------------|-------------|---------|
-| `{{MODULE_NAME}}` | Module name | `Invoke-MyModule` |
-| `{{MODULE_DESCRIPTION}}` | Module description | `Storage management for Windows Server` |
-| `{{AUTHOR}}` | Author name | `John Doe` |
-| `{{COMPANY}}` | Company/organization | `Contoso Ltd` |
-| `{{MODULE_GUID}}` | Unique module GUID | `12345678-1234-1234-1234-123456789012` |
-
-Files named `TemplateModule.*` will be renamed to your actual module name.
-
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
@@ -293,7 +332,3 @@ Built with:
 1. Fork the template repository
 2. Make your improvements
 3. Submit a pull request with a clear description
-
----
-
-**Ready to build your module?** Run `./Initialize-Template.ps1` to get started!

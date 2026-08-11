@@ -26,4 +26,10 @@
     Metadata                    = '[1.5.7,2.0)'  # required by Configuration
     Plaster                     = '[2.1.3,3.0)'  # required by Sampler
     PowerShellForGitHub         = '[0.17.0,1.0)' # required by Sampler.GitHubTasks
+
+    # Runtime dependencies of the Copy-EntraUser module
+    'Microsoft.Graph.Authentication'     = '[2.25.0,3.0)'
+    'Microsoft.Graph.Users'              = '[2.25.0,3.0)'
+    'Microsoft.Graph.Groups'             = '[2.25.0,3.0)'
+    'Microsoft.Graph.Identity.Governance' = '[2.25.0,3.0)'
 }
