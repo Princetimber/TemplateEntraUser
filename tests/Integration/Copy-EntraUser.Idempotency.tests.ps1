@@ -30,20 +30,26 @@ Describe 'Copy-EntraUser end-to-end idempotency' -Tag 'Integration' {
             [pscustomobject]@{ Id = '00000000-0000-0000-0000-000000000004' }
         } -ModuleName $script:dscModuleName
         # Two direct memberships: a plain group (no matching eligibility
-        # instance) and a group that also has a PIM-for-Groups eligibility
+        # instance) and a group that ALSO has a PIM-for-Groups eligibility
         # instance (GroupId matches the eligibility mock below) — so
         # Split-EntraGroupMembership routes one to PlainGroup and the other
         # to PimGroup, exercising both the Add-EntraGroupMembership and the
         # Grant-EntraGroupEligibility idempotency paths in this single run.
+        # A THIRD group is eligibility-only (GroupId '33333333-...' below) --
+        # deliberately absent from this direct-membership mock -- so
+        # Get-EntraTemplateGroupMembership's Get-MgGroup resolution and the
+        # DirectGroup/EligibilityOnlyGroup union in Split-EntraGroupMembership
+        # are exercised end-to-end, not just the "PIM group also happens to
+        # be a direct member" shape.
         Mock Get-MgUserMemberOfAsGroup {
             @(
                 [pscustomobject]@{
                     Id = '11111111-1111-1111-1111-111111111111'; DisplayName = 'Plain Group'
-                    GroupTypes = @(); AdditionalProperties = @{ isAssignableToRole = $false }
+                    GroupTypes = @(); IsAssignableToRole = $false
                 },
                 [pscustomobject]@{
-                    Id = '22222222-2222-2222-2222-222222222222'; DisplayName = 'PIM Group'
-                    GroupTypes = @(); AdditionalProperties = @{ isAssignableToRole = $false }
+                    Id = '22222222-2222-2222-2222-222222222222'; DisplayName = 'PIM Group (also a direct member)'
+                    GroupTypes = @(); IsAssignableToRole = $false
                 }
             )
         } -ModuleName $script:dscModuleName
@@ -55,21 +61,44 @@ Describe 'Copy-EntraUser end-to-end idempotency' -Tag 'Integration' {
         # presence of 'groupId' in the -Filter string so each can be
         # exercised/falsified independently.
         Mock Get-MgIdentityGovernancePrivilegedAccessGroupEligibilityScheduleInstance {
-            @([pscustomobject]@{
+            @(
+                [pscustomobject]@{
                     GroupId = '22222222-2222-2222-2222-222222222222'
                     PrincipalId = '00000000-0000-0000-0000-000000000004'
                     AccessId = 'member'
-                })
+                },
+                [pscustomobject]@{
+                    GroupId = '33333333-3333-3333-3333-333333333333'
+                    PrincipalId = '00000000-0000-0000-0000-000000000004'
+                    AccessId = 'owner'
+                }
+            )
         } -ModuleName $script:dscModuleName -ParameterFilter { $Filter -notmatch 'groupId' }
         # Already-fully-provisioned state: an eligibility instance already
-        # exists for this exact principal/group pair.
+        # exists for both exact principal/group pairs (the direct-member PIM
+        # group and the eligibility-only PIM group).
         Mock Get-MgIdentityGovernancePrivilegedAccessGroupEligibilityScheduleInstance {
             @([pscustomobject]@{
                     GroupId = '22222222-2222-2222-2222-222222222222'
                     PrincipalId = '00000000-0000-0000-0000-000000000004'
                     AccessId = 'member'
                 })
-        } -ModuleName $script:dscModuleName -ParameterFilter { $Filter -match 'groupId' }
+        } -ModuleName $script:dscModuleName -ParameterFilter { $Filter -match "groupId eq '22222222-2222-2222-2222-222222222222'" }
+        Mock Get-MgIdentityGovernancePrivilegedAccessGroupEligibilityScheduleInstance {
+            @([pscustomobject]@{
+                    GroupId = '33333333-3333-3333-3333-333333333333'
+                    PrincipalId = '00000000-0000-0000-0000-000000000004'
+                    AccessId = 'owner'
+                })
+        } -ModuleName $script:dscModuleName -ParameterFilter { $Filter -match "groupId eq '33333333-3333-3333-3333-333333333333'" }
+        # Resolves the eligibility-only group (GroupId '33333333-...') to an
+        # actual group object -- this is the C1 union path.
+        Mock Get-MgGroup {
+            [pscustomobject]@{
+                Id = '33333333-3333-3333-3333-333333333333'; DisplayName = 'Eligible-Only Group'
+                GroupTypes = @(); IsAssignableToRole = $false
+            }
+        } -ModuleName $script:dscModuleName
         # Already-fully-provisioned state: the target is already a direct member.
         Mock Get-MgGroupMember {
             @([pscustomobject]@{ Id = '00000000-0000-0000-0000-000000000004' })

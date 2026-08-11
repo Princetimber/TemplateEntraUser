@@ -115,29 +115,33 @@ function Copy-EntraUser {
         }
         $context = Connect-EntraGraphSession @connectParams
 
-        $templateUser = Resolve-EntraTemplateUser -UserId $TemplateUserId
-        $newUserObject = Resolve-EntraNewUser -NewUser $NewUser
+        try {
+            $templateUser = Resolve-EntraTemplateUser -UserId $TemplateUserId
+            $newUserObject = Resolve-EntraNewUser -NewUser $NewUser
 
-        $membership = Get-EntraTemplateGroupMembership -TemplateUserId $templateUser.Id
-        $split = Split-EntraGroupMembership -DirectGroup $membership.DirectGroup `
-            -EligibilitySchedule $membership.EligibilitySchedule
+            $membership = Get-EntraTemplateGroupMembership -TemplateUserId $templateUser.Id
+            $split = Split-EntraGroupMembership -DirectGroup $membership.DirectGroup `
+                -EligibilityOnlyGroup $membership.EligibilityOnlyGroup `
+                -EligibilitySchedule $membership.EligibilitySchedule
 
-        foreach ($group in $split.UnsupportedGroup) {
-            Write-Warning "Skipped group '$($group.DisplayName)' ($($group.Id)): dynamic-membership or role-assignable groups are not cloned by Copy-EntraUser."
-        }
-
-        if ($PSCmdlet.ShouldProcess($newUserObject.Id, "Clone group memberships and PIM-for-Groups eligibility from '$TemplateUserId'")) {
-            foreach ($group in $split.PlainGroup) {
-                Add-EntraGroupMembership -GroupId $group.Id -NewUserId $newUserObject.Id
+            foreach ($group in $split.UnsupportedGroup) {
+                Write-Warning "Skipped group '$($group.DisplayName)' ($($group.Id)): dynamic-membership or role-assignable groups are not cloned by Copy-EntraUser."
             }
 
-            foreach ($group in $split.PimGroup) {
-                Grant-EntraGroupEligibility -GroupId $group.Id -NewUserId $newUserObject.Id -AccessId $group.AccessId
+            if ($PSCmdlet.ShouldProcess($newUserObject.Id, "Clone group memberships and PIM-for-Groups eligibility from '$TemplateUserId'")) {
+                foreach ($group in $split.PlainGroup) {
+                    Add-EntraGroupMembership -GroupId $group.Id -NewUserId $newUserObject.Id
+                }
+
+                foreach ($group in $split.PimGroup) {
+                    Grant-EntraGroupEligibility -GroupId $group.Id -NewUserId $newUserObject.Id -AccessId $group.AccessId
+                }
             }
         }
-
-        if ($context.AuthType -eq 'Delegated') {
-            Disconnect-MgGraph | Out-Null
+        finally {
+            if ($context.AuthType -eq 'Delegated') {
+                Disconnect-MgGraph | Out-Null
+            }
         }
     }
 }

@@ -18,8 +18,9 @@ Describe 'Copy-EntraUser' {
             @{
                 DirectGroup = @([pscustomobject]@{
                         Id = '11111111-1111-1111-1111-111111111111'; GroupTypes = @()
-                        AdditionalProperties = @{ isAssignableToRole = $false }
+                        IsAssignableToRole = $false
                     })
+                EligibilityOnlyGroup = @()
                 EligibilitySchedule = @()
             }
         } -ModuleName $script:dscModuleName
@@ -68,5 +69,51 @@ Describe 'Copy-EntraUser' {
             -TenantId '00000000-0000-0000-0000-000000000000' -ClientId '00000000-0000-0000-0000-000000000001' `
             -CertificatePath 'x.pfx' -CertificatePassword (ConvertTo-SecureString 'x' -AsPlainText -Force) -WhatIf
         Should -Invoke Add-EntraGroupMembership -Times 0 -ModuleName $script:dscModuleName
+    }
+
+    Context 'C1: eligibility-only groups are still cloned end-to-end' {
+        BeforeAll {
+            # This group is ONLY reachable via EligibilityOnlyGroup -- it is
+            # deliberately absent from DirectGroup -- exercising the union
+            # logic across the real Get-EntraTemplateGroupMembership/
+            # Split-EntraGroupMembership call sites in Copy-EntraUser itself.
+            Mock Get-EntraTemplateGroupMembership {
+                @{
+                    DirectGroup = @()
+                    EligibilityOnlyGroup = @([pscustomobject]@{
+                            Id = '55555555-5555-5555-5555-555555555555'; DisplayName = 'Eligible-Only Group'
+                            GroupTypes = @(); IsAssignableToRole = $false
+                        })
+                    EligibilitySchedule = @([pscustomobject]@{
+                            GroupId = '55555555-5555-5555-5555-555555555555'; AccessId = 'owner'
+                        })
+                }
+            } -ModuleName $script:dscModuleName
+        }
+
+        It 'Grants PIM-for-Groups eligibility for a group the template user is only eligible for, never a direct member of' {
+            Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' -NewUser 'b@contoso.onmicrosoft.com' `
+                -TenantId '00000000-0000-0000-0000-000000000000' -ClientId '00000000-0000-0000-0000-000000000001' `
+                -CertificatePath 'x.pfx' -CertificatePassword (ConvertTo-SecureString 'x' -AsPlainText -Force) -Confirm:$false
+            Should -Invoke Grant-EntraGroupEligibility -Times 1 -ModuleName $script:dscModuleName -ParameterFilter {
+                $GroupId -eq '55555555-5555-5555-5555-555555555555' -and $AccessId -eq 'owner'
+            }
+            Should -Invoke Add-EntraGroupMembership -Times 0 -ModuleName $script:dscModuleName
+        }
+    }
+
+    Context 'M7: delegated session is disconnected even when a mutation throws' {
+        It 'Still calls Disconnect-MgGraph when Add-EntraGroupMembership throws' {
+            Mock Connect-EntraGraphSession { [pscustomobject]@{ AuthType = 'Delegated' } } -ModuleName $script:dscModuleName
+            Mock Add-EntraGroupMembership { throw 'Simulated Graph failure' } -ModuleName $script:dscModuleName
+
+            {
+                Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' -NewUser 'b@contoso.onmicrosoft.com' `
+                    -TenantId '00000000-0000-0000-0000-000000000000' -ClientId '00000000-0000-0000-0000-000000000001' `
+                    -CertificatePath 'x.pfx' -CertificatePassword (ConvertTo-SecureString 'x' -AsPlainText -Force) -Confirm:$false
+            } | Should -Throw 'Simulated Graph failure'
+
+            Should -Invoke Disconnect-MgGraph -Times 1 -ModuleName $script:dscModuleName
+        }
     }
 }
