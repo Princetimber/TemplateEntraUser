@@ -9,13 +9,15 @@ AfterAll {
 }
 
 Describe 'Get-RequiredGraphPermission' {
-    It 'Returns the exact three least-privilege permission strings, once each' {
+    It 'Returns the exact five least-privilege permission strings, once each' {
         InModuleScope -ModuleName $script:dscModuleName {
             $result = Get-RequiredGraphPermission
-            $result | Should -HaveCount 3
+            $result | Should -HaveCount 5
             $result | Should -Contain 'User.ReadWrite.All'
             $result | Should -Contain 'GroupMember.ReadWrite.All'
             $result | Should -Contain 'PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup'
+            $result | Should -Contain 'RoleEligibilitySchedule.ReadWrite.Directory'
+            $result | Should -Contain 'RoleAssignmentSchedule.Read.Directory'
         }
     }
 

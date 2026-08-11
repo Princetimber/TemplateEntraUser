@@ -15,6 +15,15 @@ function Get-RequiredGraphPermission {
         PIM-for-Groups eligibility schedule requests/instances. It is NOT
         named PrivilegedAccessGroup.ReadWrite.AzureADGroup (that string does
         not exist in the Graph permissions reference).
+
+        NOTE: RoleEligibilitySchedule.ReadWrite.Directory and
+        RoleAssignmentSchedule.Read.Directory are the verified Microsoft
+        Graph permission names for directory-role PIM (as opposed to
+        PIM-for-Groups): reading/writing role eligibility schedule instances
+        and requests, and read-only access to active role assignment
+        schedule instances (used only to detect permanent, non-PIM role
+        assignments so they can be skipped with a warning rather than
+        cloned).
     .OUTPUTS
         System.String[]
     .EXAMPLE
@@ -28,5 +37,7 @@ function Get-RequiredGraphPermission {
         'User.ReadWrite.All'
         'GroupMember.ReadWrite.All'
         'PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup'
+        'RoleEligibilitySchedule.ReadWrite.Directory'
+        'RoleAssignmentSchedule.Read.Directory'
     )
 }
