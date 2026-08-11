@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Copy-EntraUser` now also clones the template user's directly-assigned,
+  PIM-eligible directory role assignments onto the new/target user, as an
+  ELIGIBLE (never active/permanent) grant — mirroring the existing
+  PIM-for-Groups eligibility cloning. Administrative Unit-scoped role
+  eligibilities and permanent (non-PIM) role assignments are skipped with a
+  named `Write-Warning` rather than cloned or silently dropped. Requires two
+  additional Graph permissions: `RoleEligibilitySchedule.ReadWrite.Directory`
+  and `RoleAssignmentSchedule.Read.Directory` (see
+  `Get-RequiredGraphPermission`).
+
 - `Copy-EntraUser` now accepts an opt-in `-PassThru` switch, returning a
   result object with `NewUserId` and `GeneratedPassword` properties.
   `GeneratedPassword` is populated only when a password was auto-generated
