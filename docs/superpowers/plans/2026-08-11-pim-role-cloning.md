@@ -15,7 +15,7 @@
 - Public functions (`source/Public/`) — comment-based help (`.SYNOPSIS`/`.DESCRIPTION`/`.PARAMETER`/`.EXAMPLE`) is **mandatory**.
 - `[CmdletBinding()]` on every advanced function. `SupportsShouldProcess` only on state-changing functions (`Grant-EntraRoleEligibility`), never on read-only ones (`Get-EntraTemplateRoleAssignment`, `Split-EntraRoleAssignment`).
 - Parameters: PascalCase. Local variables: camelCase. Splatting hashtable keys match the target cmdlet's PascalCase parameter names exactly.
-- No aliases, no positional parameters in new code, no backtick line continuation (use splatting).
+- No aliases, no positional parameters in new code. Backtick line continuation is the existing repo's actual pattern for a two-parameter Graph cmdlet call that doesn't fit one line (see `Grant-EntraGroupEligibility.ps1`, `Get-EntraTemplateGroupMembership.ps1`) — match that exact pattern for the Graph calls in Tasks 1 and 3; don't introduce splatting there or backticks elsewhere.
 - Follow the existing repo convention: no `#Requires -Version 7.0` line in `Private/` function files (none of the existing ones have it, despite the general PowerShell style rule — match what's actually in this file, not the aspirational rule).
 - `85%` code coverage threshold (`build.yaml`).
 - Cross-platform: all tests must run on macOS, Linux, and Windows (no live Graph calls — everything is mocked).
