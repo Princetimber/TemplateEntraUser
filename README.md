@@ -1,6 +1,6 @@
 # Copy-EntraUser
 
-A production-ready PowerShell module template built with the [Sampler](https://github.com/gaelcolas/Sampler) framework. This template provides standardized patterns, comprehensive testing, and CI/CD integration to accelerate your PowerShell module development.
+A production-ready PowerShell module, built with the [Sampler](https://github.com/gaelcolas/Sampler) framework, that clones an Entra ID user's direct group memberships and PIM-for-Groups eligible assignments onto a new or existing user — mirroring the template user's access tier without ever granting a permanent membership where the template only held PIM eligibility.
 
 ## Features
 
@@ -96,34 +96,35 @@ Copy-EntraUser/
 │   ├── Copy-EntraUser.psm1              # Root module (dot-sources functions)
 │   ├── en-US/
 │   │   └── about_Copy-EntraUser.help.txt # About help file
-│   ├── Public/                           # Exported functions (one per file)
+│   ├── Public/
+│   │   └── Copy-EntraUser.ps1           # The exported cmdlet: orchestrates the whole clone
 │   └── Private/                          # Internal helpers (one per file)
-│       ├── Write-ToLog.ps1              # Thread-safe logger (core entry point)
-│       ├── Clear-LogFile.ps1            # Clears the active log (archive option)
-│       ├── Get-LogFilePath.ps1          # Returns current log file path
-│       ├── Get-LogFileSize.ps1          # Returns log file size in bytes
-│       ├── Invoke-LogRotation.ps1       # Rotates numbered log backups
-│       ├── Set-LogFilePath.ps1          # Sets the module-scoped log path
-│       └── Write-ErrorLog.ps1           # ErrorRecord convenience wrapper
+│       ├── Connect-EntraGraphSession.ps1        # CBA connect, auto-falls back to interactive
+│       ├── Resolve-EntraTemplateUser.ps1        # Resolves the template user by UPN/ObjectId
+│       ├── Resolve-EntraNewUser.ps1             # Resolves/creates the target user (idempotent)
+│       ├── Get-EntraTemplateGroupMembership.ps1 # Reads direct memberships + PIM eligibility
+│       ├── Split-EntraGroupMembership.ps1       # Pure partition: Plain / Pim / Unsupported
+│       ├── Add-EntraGroupMembership.ps1         # Idempotent direct membership write
+│       ├── Grant-EntraGroupEligibility.ps1      # Idempotent PIM-for-Groups eligibility grant
+│       ├── Get-RequiredGraphPermission.ps1      # Single source of truth for required scopes
+│       ├── Test-RequiredGraphModule.ps1         # Verifies Microsoft.Graph sub-modules are present
+│       └── Write-ToLog.ps1                      # Thread-safe logger used across the module
 ├── tests/
 │   ├── QA/
-│   │   └── module.tests.ps1              # ScriptAnalyzer, changelog, help tests
-│   └── Unit/
-│       ├── Public/
-│       └── Private/
-│           ├── Write-ToLog.tests.ps1
-│           ├── Clear-LogFile.tests.ps1
-│           ├── Get-LogFilePath.tests.ps1
-│           ├── Get-LogFileSize.tests.ps1
-│           ├── Invoke-LogRotation.tests.ps1
-│           ├── Set-LogFilePath.tests.ps1
-│           └── Write-ErrorLog.tests.ps1
+│   │   ├── module.tests.ps1              # ScriptAnalyzer, changelog, help tests
+│   │   └── repository.tests.ps1          # Repository-level hygiene checks
+│   ├── Unit/
+│   │   ├── Public/
+│   │   │   └── Copy-EntraUser.tests.ps1
+│   │   └── Private/                      # One test file per helper above
+│   └── Integration/
+│       └── Copy-EntraUser.Idempotency.tests.ps1  # Full-chain, zero-mutation-on-rerun proof
+├── ASSUMPTIONS.md                        # Decisions register for this instantiation
 ├── azure-pipelines.yml                   # Azure Pipelines (multi-platform, PSGallery deploy)
 ├── build.ps1                             # Sampler build bootstrap
 ├── build.yaml                            # Sampler build configuration
 ├── CHANGELOG.md                          # Keep a Changelog format
 ├── CLAUDE.md                             # Claude Code context and standards
-├── Initialize-Template.ps1               # One-time setup script (removes itself)
 ├── LICENSE                               # MIT License
 ├── README.md                             # This file
 ├── RequiredModules.psd1                  # Build dependencies (pinned version ranges)
@@ -189,26 +190,27 @@ Copy-EntraUser `
 - Creates the new user with the properties specified in the hashtable
 - Clones the template user's group memberships and PIM eligibility to the newly created account
 
-## Patterns Demonstrated
+## How Copy-EntraUser Works
 
-### Logging Framework (Private)
-
-Seven private functions form a production-grade, thread-safe logging system:
+`Copy-EntraUser` is composed of small, single-responsibility private helpers, each independently unit-tested and orchestrated by the public `Copy-EntraUser` cmdlet:
 
 | Function | Purpose |
 |----------|---------|
-| `Write-ToLog` | Core entry point. Writes timestamped entries to `$script:LogFile` under a named mutex. Supports INFO, DEBUG, WARN, ERROR, SUCCESS levels. Redacts sensitive values. ANSI colour console output with PSStyle fallback. |
-| `Clear-LogFile` | Clears the active log. `ConfirmImpact=High` — prompts unless `-Force`. `-Archive` copies a timestamped `.bak` before clearing. |
-| `Get-LogFilePath` | Returns the current module-scoped log file path for inspection or external use. |
-| `Get-LogFileSize` | Returns the log file size in bytes; returns `0` if the file does not yet exist. |
-| `Invoke-LogRotation` | Shifts numbered backups up (`.5` removed, `.4→.5`, …, current→`.1`). Called inside the `Write-ToLog` mutex — not for direct use. |
-| `Set-LogFilePath` | Sets `$script:LogFile` (and `$Global:LogFile` for backward compatibility) to an absolute path. `-Force` creates the directory. |
-| `Write-ErrorLog` | Convenience wrapper for `[ErrorRecord]` objects. Logs the message at ERROR; exception type, category, location, and inner exception at DEBUG. `-IncludeStackTrace` appends the PowerShell script stack trace. |
+| `Connect-EntraGraphSession` | Certificate-based app-only auth by default; falls back to interactive delegated sign-in (with an explicit warning) if the certificate cannot be loaded. |
+| `Resolve-EntraTemplateUser` | Resolves the template user by UPN or ObjectId. |
+| `Resolve-EntraNewUser` | Resolves an existing target user, or idempotently creates one from a supplied property hashtable (checks for an existing UPN match first). |
+| `Get-EntraTemplateGroupMembership` | Reads the template user's direct (non-transitive) group memberships and current PIM-for-Groups eligibility schedule instances; resolves the group object for any eligibility-only group not already covered by a direct membership. |
+| `Split-EntraGroupMembership` | Pure function: partitions the combined group set into `PlainGroup` (direct membership), `PimGroup` (PIM-for-Groups eligible), and `UnsupportedGroup` (dynamic-membership or role-assignable groups, skipped with a warning). |
+| `Add-EntraGroupMembership` | Idempotently adds the target user as a direct member (reads current members first, skips if already present). |
+| `Grant-EntraGroupEligibility` | Idempotently grants an ELIGIBLE (never active/permanent) PIM-for-Groups assignment mirroring the template user's access tier. |
+| `Get-RequiredGraphPermission` | Single source of truth for the required application/delegated Graph permissions, keeping both auth paths in sync. |
+| `Test-RequiredGraphModule` | Verifies the required Microsoft.Graph sub-modules are installed before connecting. |
 
 **Key design choices:**
-- All file I/O calls go through thin wrapper functions (`Add-ContentWrapper`, `Test-PathWrapper`, etc.) so Pester can mock them without touching the filesystem.
-- Auto-rotation at 10 MB keeps up to 5 numbered backups.
-- Sensitive data (passwords, tokens, keys, secrets) is redacted in key=value, JSON, and XML formats before any write.
+- Every mutating helper (`Add-EntraGroupMembership`, `Grant-EntraGroupEligibility`, `Resolve-EntraNewUser`) reads current state before writing, so re-running `Copy-EntraUser` against an already-provisioned user makes zero mutating Graph calls (see `tests/Integration/Copy-EntraUser.Idempotency.tests.ps1`).
+- `Split-EntraGroupMembership` is a pure function with no Graph calls or side effects, making the routing logic (plain vs. PIM vs. unsupported) exhaustively unit-testable in isolation.
+- A template user's PIM-for-Groups eligibility never becomes a permanent direct membership on the new user — the module always mirrors the access *tier*, never escalates it.
+- `Write-ToLog` (and its supporting private helpers) provide thread-safe, mutex-protected logging with automatic rotation and secret redaction, used across the module for diagnostics.
 
 ## CI/CD Setup
 
@@ -312,18 +314,6 @@ Invoke-Pester -CodeCoverage source/**/*.ps1
 ### Test Structure
 - **QA Tests** (`tests/QA/module.tests.ps1`) - ScriptAnalyzer compliance, changelog format, help documentation quality
 - **Unit Tests** (`tests/Unit/`) - Mirrors source structure with mocked dependencies
-
-## Placeholder Reference
-
-| Placeholder | Description | Example |
-|-------------|-------------|---------|
-| `Copy-EntraUser` | Module name | `Invoke-MyModule` |
-| `Creates a new user from an existing Entra ID user Object with all their eassociated permissions` | Module description | `Storage management for Windows Server` |
-| `Olamide Olaleye` | Author name | `John Doe` |
-| `Fountview Enterprise Solutions Limited` | Company/organization | `Contoso Ltd` |
-| `{{MODULE_GUID}}` | Unique module GUID | `12345678-1234-1234-1234-123456789012` |
-
-Files named `Copy-EntraUser.*` will be renamed to your actual module name.
 
 ## License
 

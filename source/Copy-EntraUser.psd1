@@ -28,7 +28,7 @@ CompanyName = 'Fountview Enterprise Solutions Limited'
 Copyright = '(c) Olamide Olaleye. All rights reserved.'
 
 # Description of the functionality provided by this module
-Description = 'Creates a new user from an existing Entra ID user Object with all their eassociated permissions'
+Description = 'Creates a new user from an existing Entra ID user Object with all their associated permissions'
 
 # Minimum version of the PowerShell engine required by this module
 PowerShellVersion = '7.0'

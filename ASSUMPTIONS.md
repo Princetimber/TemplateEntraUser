@@ -106,11 +106,11 @@ This conservative approach prevents surprise installations and keeps automation 
 
 ## Microsoft.Graph Module Version Floor
 
-The `RequiredModules.psd1` file specifies `Microsoft.Graph` sub-module version **`2.25.0`** as the minimum version. This is marked **`[CONFIRM]`** — verify this version floor against the current PowerShell Gallery release **before** first production use. Microsoft Graph PowerShell SDK evolves rapidly; confirm that:
+The `RequiredModules.psd1` file specifies `Microsoft.Graph` sub-module version **`2.25.0`** as the confirmed minimum version floor. Microsoft Graph PowerShell SDK evolves rapidly, so this floor should be periodically re-verified against the current PowerShell Gallery release rather than treated as fixed forever. When re-verifying, confirm that:
 
-- Version `2.25.0` (or higher) is available on the target PowerShell Gallery
-- The deployment environment's automation can resolve and install this version
-- Breaking changes between your current production version and `2.25.0` do not affect your organization's scripts
+- Version `2.25.0` (or higher) is still available on the target PowerShell Gallery
+- The deployment environment's automation can resolve and install the version in use
+- Breaking changes between your current production version and any newer floor do not affect your organization's scripts
 
 ## Repository Ownership and Visibility
 
