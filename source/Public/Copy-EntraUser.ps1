@@ -54,6 +54,16 @@ function Copy-EntraUser {
         so it only ever needs to work for a single first sign-in.
     .PARAMETER NewUserAccountEnabled
         Whether the newly created account is enabled. Defaults to $true.
+    .PARAMETER PassThru
+        Returns a result object with NewUserId and GeneratedPassword
+        properties. GeneratedPassword is populated only when a password was
+        auto-generated (i.e. -NewUserPassword was omitted on the named-
+        parameter create-user path); it is $null when the caller supplied
+        their own -NewUserPassword, or when -NewUser (an existing user or a
+        hand-built hashtable) was used instead. Without -PassThru, the
+        function produces no pipeline output at all -- this is the only
+        supported way to retrieve an auto-generated password, since it is
+        never written to any other output stream.
     .PARAMETER TenantId
         The Entra ID tenant ID (GUID) to connect to. Required when a
         certificate parameter is supplied; optional for interactive-only
@@ -124,6 +134,15 @@ function Copy-EntraUser {
             -NewUserPrincipalName 'new.hire@contoso.onmicrosoft.com' `
             -NewUserDisplayName 'New Hire' `
             -NewUserMailNickname 'new.hire'
+    .EXAMPLE
+        # Retrieve the auto-generated password explicitly via -PassThru.
+        # Without -PassThru, the generated password cannot be recovered.
+        $result = Copy-EntraUser -TemplateUserId 'template.user@contoso.onmicrosoft.com' `
+            -NewUserPrincipalName 'new.hire@contoso.onmicrosoft.com' `
+            -NewUserDisplayName 'New Hire' `
+            -NewUserMailNickname 'new.hire' `
+            -PassThru
+        $result.GeneratedPassword
     #>
     [CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Interactive')]
     param(
@@ -147,6 +166,9 @@ function Copy-EntraUser {
 
         [Parameter()]
         [bool] $NewUserAccountEnabled = $true,
+
+        [Parameter()]
+        [switch] $PassThru,
 
         [Parameter()]
         [string] $TenantId,
@@ -179,12 +201,16 @@ function Copy-EntraUser {
             throw 'You must supply either -NewUser (an existing user identifier or a properties hashtable) or -NewUserPrincipalName (with -NewUserDisplayName and -NewUserMailNickname) to create a new user.'
         }
 
+        $passwordWasGenerated = $false
+        $plainPassword = $null
+
         if ($suppliedNewUserPrincipalName) {
             if (-not $NewUserDisplayName -or -not $NewUserMailNickname) {
                 throw '-NewUserDisplayName and -NewUserMailNickname are both required alongside -NewUserPrincipalName.'
             }
 
-            $securePassword = if ($PSBoundParameters.ContainsKey('NewUserPassword')) { $NewUserPassword } else { New-EntraUserPassword }
+            $passwordWasGenerated = -not $PSBoundParameters.ContainsKey('NewUserPassword')
+            $securePassword = if ($passwordWasGenerated) { New-EntraUserPassword } else { $NewUserPassword }
             $plainPassword = [System.Net.NetworkCredential]::new('', $securePassword).Password
 
             $NewUser = @{
@@ -237,6 +263,13 @@ function Copy-EntraUser {
         finally {
             if ($context.AuthType -eq 'Delegated') {
                 Disconnect-MgGraph | Out-Null
+            }
+        }
+
+        if ($PassThru) {
+            [pscustomobject]@{
+                NewUserId         = $newUserObject.Id
+                GeneratedPassword = if ($passwordWasGenerated) { $plainPassword } else { $null }
             }
         }
     }

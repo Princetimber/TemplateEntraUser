@@ -229,6 +229,53 @@ Describe 'Copy-EntraUser' {
         }
     }
 
+    Context '-PassThru: opt-in retrieval of the generated password' {
+        It 'Produces no pipeline output at all when -PassThru is not specified' {
+            $result = Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' `
+                -NewUserPrincipalName 'new.hire@contoso.onmicrosoft.com' `
+                -NewUserDisplayName 'New Hire' `
+                -NewUserMailNickname 'new.hire' `
+                -Confirm:$false
+
+            $result | Should -BeNullOrEmpty
+        }
+
+        It 'Returns NewUserId and the generated plaintext password when a password was auto-generated' {
+            $result = Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' `
+                -NewUserPrincipalName 'new.hire@contoso.onmicrosoft.com' `
+                -NewUserDisplayName 'New Hire' `
+                -NewUserMailNickname 'new.hire' `
+                -Confirm:$false -PassThru
+
+            $result.NewUserId | Should -Be '00000000-0000-0000-0000-000000000004'
+            $result.GeneratedPassword | Should -Be 'AutoGenPlaceholder1'
+        }
+
+        It 'Returns GeneratedPassword as $null when the caller supplied their own -NewUserPassword' {
+            $suppliedPassword = ConvertTo-SecureString -String 'CallerSuppliedPlaceholder1' -AsPlainText -Force
+
+            $result = Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' `
+                -NewUserPrincipalName 'new.hire@contoso.onmicrosoft.com' `
+                -NewUserDisplayName 'New Hire' `
+                -NewUserMailNickname 'new.hire' `
+                -NewUserPassword $suppliedPassword `
+                -Confirm:$false -PassThru
+
+            $result.NewUserId | Should -Be '00000000-0000-0000-0000-000000000004'
+            $result.GeneratedPassword | Should -BeNullOrEmpty
+        }
+
+        It 'Returns GeneratedPassword as $null when -NewUser (existing user) is used instead of the named parameters' {
+            $result = Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' -NewUser 'b@contoso.onmicrosoft.com' `
+                -TenantId '00000000-0000-0000-0000-000000000000' -ClientId '00000000-0000-0000-0000-000000000001' `
+                -CertificatePath 'x.pfx' -CertificatePassword (ConvertTo-SecureString 'x' -AsPlainText -Force) `
+                -Confirm:$false -PassThru
+
+            $result.NewUserId | Should -Be '00000000-0000-0000-0000-000000000004'
+            $result.GeneratedPassword | Should -BeNullOrEmpty
+        }
+    }
+
     Context 'M7: delegated session is disconnected even when a mutation throws' {
         It 'Still calls Disconnect-MgGraph when Add-EntraGroupMembership throws' {
             Mock Connect-EntraGraphSession { [pscustomobject]@{ AuthType = 'Delegated' } } -ModuleName $script:dscModuleName

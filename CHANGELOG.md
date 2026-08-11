@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Copy-EntraUser` now accepts an opt-in `-PassThru` switch, returning a
+  result object with `NewUserId` and `GeneratedPassword` properties.
+  `GeneratedPassword` is populated only when a password was auto-generated
+  (i.e. `-NewUserPassword` was omitted on the named-parameter create-user
+  path) and is `$null` whenever the caller supplied their own password or
+  used `-NewUser` instead. Without `-PassThru`, `Copy-EntraUser` continues
+  to produce no pipeline output at all -- this remains the only supported
+  way to retrieve an auto-generated password, since it is still never
+  written to any other output stream.
+
 - `Copy-EntraUser` now accepts named parameters (`-NewUserPrincipalName`,
   `-NewUserDisplayName`, `-NewUserMailNickname`, `-NewUserPassword`,
   `-NewUserAccountEnabled`) as an alternative to hand-building a `-NewUser`
