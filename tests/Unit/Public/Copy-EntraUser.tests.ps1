@@ -1,17 +1,19 @@
 #Requires -Version 7.0
 BeforeAll {
     $script:dscModuleName = 'Copy-EntraUser'
-    Get-ChildItem -Path (Join-Path $PSScriptRoot '../../../source/Private') -Filter '*.ps1' |
-        ForEach-Object { . $_.FullName }
-    . (Join-Path $PSScriptRoot '../../../source/Public/Copy-EntraUser.ps1')
+    Import-Module -Name $script:dscModuleName -Force
+}
+
+AfterAll {
+    Get-Module -Name $script:dscModuleName -All | Remove-Module -Force
 }
 
 Describe 'Copy-EntraUser' {
     BeforeAll {
-        Mock Test-RequiredGraphModule { }
-        Mock Connect-EntraGraphSession { [pscustomobject]@{ AuthType = 'AppOnly' } }
-        Mock Resolve-EntraTemplateUser { [pscustomobject]@{ Id = '00000000-0000-0000-0000-000000000002' } }
-        Mock Resolve-EntraNewUser { [pscustomobject]@{ Id = '00000000-0000-0000-0000-000000000004' } }
+        Mock Test-RequiredGraphModule { } -ModuleName $script:dscModuleName
+        Mock Connect-EntraGraphSession { [pscustomobject]@{ AuthType = 'AppOnly' } } -ModuleName $script:dscModuleName
+        Mock Resolve-EntraTemplateUser { [pscustomobject]@{ Id = '00000000-0000-0000-0000-000000000002' } } -ModuleName $script:dscModuleName
+        Mock Resolve-EntraNewUser { [pscustomobject]@{ Id = '00000000-0000-0000-0000-000000000004' } } -ModuleName $script:dscModuleName
         Mock Get-EntraTemplateGroupMembership {
             @{
                 DirectGroup = @([pscustomobject]@{
@@ -20,10 +22,10 @@ Describe 'Copy-EntraUser' {
                     })
                 EligibilitySchedule = @()
             }
-        }
-        Mock Add-EntraGroupMembership { }
-        Mock Grant-EntraGroupEligibility { }
-        Mock Disconnect-MgGraph { }
+        } -ModuleName $script:dscModuleName
+        Mock Add-EntraGroupMembership { } -ModuleName $script:dscModuleName
+        Mock Grant-EntraGroupEligibility { } -ModuleName $script:dscModuleName
+        Mock Disconnect-MgGraph { } -ModuleName $script:dscModuleName
     }
 
     It 'Requires -TemplateUserId, -NewUser, -TenantId, -ClientId' {
@@ -45,8 +47,8 @@ Describe 'Copy-EntraUser' {
         Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' -NewUser 'b@contoso.onmicrosoft.com' `
             -TenantId '00000000-0000-0000-0000-000000000000' -ClientId '00000000-0000-0000-0000-000000000001' `
             -CertificatePath 'x.pfx' -CertificatePassword (ConvertTo-SecureString 'x' -AsPlainText -Force) -Confirm:$false
-        Should -Invoke Add-EntraGroupMembership -Times 1
-        Should -Invoke Grant-EntraGroupEligibility -Times 0
+        Should -Invoke Add-EntraGroupMembership -Times 1 -ModuleName $script:dscModuleName
+        Should -Invoke Grant-EntraGroupEligibility -Times 0 -ModuleName $script:dscModuleName
     }
 
     It 'Running twice performs the same read-then-skip mutation pattern (no unconditional double-create)' {
@@ -58,13 +60,13 @@ Describe 'Copy-EntraUser' {
         # Add-EntraGroupMembership itself owns the read-before-write idempotency check (Task 9's own
         # tests already prove that); here we assert the orchestrator calls it once per run either way,
         # i.e. it never skips calling the (idempotent) helper.
-        Should -Invoke Add-EntraGroupMembership -Times 2
+        Should -Invoke Add-EntraGroupMembership -Times 2 -ModuleName $script:dscModuleName
     }
 
     It 'Supports -WhatIf without connecting or mutating' {
         Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' -NewUser 'b@contoso.onmicrosoft.com' `
             -TenantId '00000000-0000-0000-0000-000000000000' -ClientId '00000000-0000-0000-0000-000000000001' `
             -CertificatePath 'x.pfx' -CertificatePassword (ConvertTo-SecureString 'x' -AsPlainText -Force) -WhatIf
-        Should -Invoke Add-EntraGroupMembership -Times 0
+        Should -Invoke Add-EntraGroupMembership -Times 0 -ModuleName $script:dscModuleName
     }
 }
