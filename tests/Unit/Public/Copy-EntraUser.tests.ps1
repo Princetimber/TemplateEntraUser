@@ -29,11 +29,11 @@ Describe 'Copy-EntraUser' {
         Mock Disconnect-MgGraph { } -ModuleName $script:dscModuleName
     }
 
-    It 'Requires -TemplateUserId, -NewUser, -TenantId, -ClientId' {
+    It 'Requires -TemplateUserId and -NewUser; TenantId/ClientId are optional (interactive mode needs neither)' {
         (Get-Command Copy-EntraUser).Parameters['TemplateUserId'].Attributes.Mandatory | Should -Contain $true
         (Get-Command Copy-EntraUser).Parameters['NewUser'].Attributes.Mandatory | Should -Contain $true
-        (Get-Command Copy-EntraUser).Parameters['TenantId'].Attributes.Mandatory | Should -Contain $true
-        (Get-Command Copy-EntraUser).Parameters['ClientId'].Attributes.Mandatory | Should -Contain $true
+        (Get-Command Copy-EntraUser).Parameters['TenantId'].Attributes.Mandatory | Should -Not -Contain $true
+        (Get-Command Copy-EntraUser).Parameters['ClientId'].Attributes.Mandatory | Should -Not -Contain $true
     }
 
     It 'CertificateThumbprint and CertificatePath are mutually exclusive parameter sets' {
@@ -99,6 +99,31 @@ Describe 'Copy-EntraUser' {
                 $GroupId -eq '55555555-5555-5555-5555-555555555555' -and $AccessId -eq 'owner'
             }
             Should -Invoke Add-EntraGroupMembership -Times 0 -ModuleName $script:dscModuleName
+        }
+    }
+
+    Context 'No credentials supplied at all: connects interactively from the start' {
+        It 'Calls Connect-EntraGraphSession with no certificate/tenant/client parameters' {
+            Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' -NewUser 'b@contoso.onmicrosoft.com' -Confirm:$false
+
+            Should -Invoke Connect-EntraGraphSession -Times 1 -ModuleName $script:dscModuleName -ParameterFilter {
+                $null -eq $TenantId -and $null -eq $ClientId -and
+                $null -eq $CertificateThumbprint -and $null -eq $CertificatePath
+            }
+        }
+
+        It 'Still clones the plain group membership end-to-end with zero credentials supplied' {
+            Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' -NewUser 'b@contoso.onmicrosoft.com' -Confirm:$false
+            Should -Invoke Add-EntraGroupMembership -Times 1 -ModuleName $script:dscModuleName
+        }
+    }
+
+    It 'Passes only the supplied TenantId through when no certificate/ClientId is given' {
+        Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' -NewUser 'b@contoso.onmicrosoft.com' `
+            -TenantId '00000000-0000-0000-0000-000000000000' -Confirm:$false
+
+        Should -Invoke Connect-EntraGraphSession -Times 1 -ModuleName $script:dscModuleName -ParameterFilter {
+            $TenantId -eq '00000000-0000-0000-0000-000000000000' -and $null -eq $ClientId
         }
     }
 

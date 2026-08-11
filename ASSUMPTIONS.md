@@ -73,6 +73,12 @@ A convenience parameter `-CertificateThumbprint` is provided for **Windows-only*
 - Not recommended for production or multi-platform automation
 - Documented as Windows-only in help text
 
+### Third Path: Interactive Sign-In With No Certificate At All
+
+`-TenantId` and `-ClientId` are optional, not mandatory, on both `Copy-EntraUser` and `Connect-EntraGraphSession`. When neither `-CertificateThumbprint` nor `-CertificatePath`/`-CertificatePassword` is supplied, the function connects to Microsoft Graph interactively **from the start** — no certificate-based attempt is made, and no fallback warning is emitted, since there is nothing to fall back from. `-TenantId`/`-ClientId` are passed through to the interactive sign-in only when the caller supplies them; when omitted, Graph's own interactive flow prompts for a tenant and uses its default client registration.
+
+This exists because certificate-based auth assumes an app registration and certificate already exist (see "App Registration and Certificate Prerequisites" below) — an assumption that doesn't hold for an operator who hasn't set one up yet, or who is comfortable authenticating with their own delegated permissions for a one-off run. Certificate-based auth (either parameter set) still requires both `-TenantId` and `-ClientId`; this is enforced with an explicit, actionable error at the start of `Connect-EntraGraphSession` rather than via PowerShell's own mandatory-parameter prompting, since a value typed at an interactive prompt has no way to be validated as non-empty before binding.
+
 ## Unsupported Group Handling
 
 Groups that cannot be cloned (dynamic membership groups, role-assignable groups) are:

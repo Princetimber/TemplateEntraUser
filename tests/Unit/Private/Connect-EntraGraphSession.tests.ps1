@@ -89,4 +89,60 @@ Describe 'Connect-EntraGraphSession' {
             }
         }
     }
+
+    Context 'No certificate supplied at all' {
+        It 'Skips the CBA attempt entirely and connects interactively on the first attempt' {
+            InModuleScope -ModuleName $script:dscModuleName {
+                $script:capturedScopes = $null
+                Mock Connect-MgGraph {
+                    param($Scopes)
+                    if ($Scopes) { $script:capturedScopes = $Scopes }
+                }
+                Mock Get-MgContext { [pscustomobject]@{ AuthType = 'Delegated' } }
+
+                Connect-EntraGraphSession
+
+                Should -Invoke Connect-MgGraph -Times 1
+                Should -Invoke Connect-MgGraph -Times 0 -ParameterFilter { $null -ne $Certificate -or $null -ne $CertificateThumbprint }
+                Compare-Object $script:capturedScopes (Get-RequiredGraphPermission) | Should -BeNullOrEmpty
+            }
+        }
+
+        It 'Passes TenantId/ClientId through to the interactive call only when supplied' {
+            InModuleScope -ModuleName $script:dscModuleName {
+                Mock Connect-MgGraph { }
+                Mock Get-MgContext { [pscustomobject]@{ AuthType = 'Delegated' } }
+
+                Connect-EntraGraphSession -TenantId '00000000-0000-0000-0000-000000000000'
+
+                Should -Invoke Connect-MgGraph -Times 1 -ParameterFilter {
+                    $TenantId -eq '00000000-0000-0000-0000-000000000000' -and $null -eq $ClientId
+                }
+            }
+        }
+
+        It 'Does not warn about a fallback, since no CBA attempt was ever made' {
+            InModuleScope -ModuleName $script:dscModuleName {
+                Mock Connect-MgGraph { }
+                Mock Get-MgContext { [pscustomobject]@{ AuthType = 'Delegated' } }
+
+                $warnings = @()
+                Connect-EntraGraphSession -WarningVariable warnings -WarningAction SilentlyContinue
+
+                $warnings | Should -BeNullOrEmpty
+            }
+        }
+    }
+
+    Context 'Certificate parameters supplied but TenantId/ClientId missing' {
+        It 'Throws an actionable error before attempting to connect' {
+            InModuleScope -ModuleName $script:dscModuleName {
+                Mock Connect-MgGraph { }
+
+                { Connect-EntraGraphSession -CertificateThumbprint 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' } |
+                    Should -Throw '*TenantId*ClientId*'
+                Should -Invoke Connect-MgGraph -Times 0
+            }
+        }
+    }
 }

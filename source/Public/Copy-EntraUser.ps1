@@ -16,9 +16,13 @@ function Copy-EntraUser {
         groups found in the template user's direct memberships are skipped
         with a named Write-Warning rather than cloned or silently dropped.
 
-        Authenticates via certificate-based app-only auth by default,
-        falling back automatically to interactive delegated sign-in (with an
-        explicit warning) if certificate-based auth cannot be established.
+        Authenticates via certificate-based app-only auth when a certificate
+        is supplied, falling back automatically to interactive delegated
+        sign-in (with an explicit warning) if certificate-based auth cannot
+        be established. When no certificate parameter is supplied at all --
+        e.g. no app registration/certificate exists yet -- this connects
+        interactively from the start, with no CBA attempt and no fallback
+        warning (there is nothing to fall back from).
     .PARAMETER TemplateUserId
         The template user's UserPrincipalName or ObjectId.
     .PARAMETER NewUser
@@ -27,15 +31,21 @@ function Copy-EntraUser {
         UserPrincipalName, MailNickname, PasswordProfile, AccountEnabled)
         for a user to be created.
     .PARAMETER TenantId
-        The Entra ID tenant ID (GUID) to connect to.
+        The Entra ID tenant ID (GUID) to connect to. Required when a
+        certificate parameter is supplied; optional for interactive-only
+        sign-in (Graph will prompt for a tenant if omitted).
     .PARAMETER ClientId
-        The app registration's application (client) ID.
+        The app registration's application (client) ID. Required when a
+        certificate parameter is supplied; optional for interactive-only
+        sign-in.
     .PARAMETER CertificateThumbprint
         Thumbprint of a certificate in a local certificate store.
-        Windows-only; not portable to macOS or Linux.
+        Windows-only; not portable to macOS or Linux. Omit this and
+        -CertificatePath entirely to connect interactively instead.
     .PARAMETER CertificatePath
         Path to a portable PFX certificate file. Works identically on
-        Windows, macOS, and Linux.
+        Windows, macOS, and Linux. Omit this and -CertificateThumbprint
+        entirely to connect interactively instead.
     .PARAMETER CertificatePassword
         SecureString password protecting the PFX file at CertificatePath.
     .NOTES
@@ -77,8 +87,13 @@ function Copy-EntraUser {
             -ClientId '00000000-0000-0000-0000-000000000001' `
             -CertificatePath ./missing-or-expired.pfx `
             -CertificatePassword (Read-Host -AsSecureString 'Certificate password')
+    .EXAMPLE
+        # No app registration/certificate available yet: connects interactively
+        # from the start, with no certificate-based attempt or fallback warning.
+        Copy-EntraUser -TemplateUserId 'template.user@contoso.onmicrosoft.com' `
+            -NewUser 'new.hire@contoso.onmicrosoft.com'
     #>
-    [CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'CertificateFile')]
+    [CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Interactive')]
     param(
         [Parameter(Mandatory)]
         [string] $TemplateUserId,
@@ -86,10 +101,10 @@ function Copy-EntraUser {
         [Parameter(Mandatory, ValueFromPipeline)]
         [object] $NewUser,
 
-        [Parameter(Mandatory)]
+        [Parameter()]
         [string] $TenantId,
 
-        [Parameter(Mandatory)]
+        [Parameter()]
         [string] $ClientId,
 
         [Parameter(Mandatory, ParameterSetName = 'Thumbprint')]
@@ -105,13 +120,15 @@ function Copy-EntraUser {
     process {
         Test-RequiredGraphModule
 
-        $connectParams = @{ TenantId = $TenantId; ClientId = $ClientId }
-        if ($PSCmdlet.ParameterSetName -eq 'Thumbprint') {
-            $connectParams['CertificateThumbprint'] = $CertificateThumbprint
-        }
-        else {
-            $connectParams['CertificatePath'] = $CertificatePath
-            $connectParams['CertificatePassword'] = $CertificatePassword
+        $connectParams = @{}
+        if ($TenantId) { $connectParams['TenantId'] = $TenantId }
+        if ($ClientId) { $connectParams['ClientId'] = $ClientId }
+        switch ($PSCmdlet.ParameterSetName) {
+            'Thumbprint' { $connectParams['CertificateThumbprint'] = $CertificateThumbprint }
+            'CertificateFile' {
+                $connectParams['CertificatePath'] = $CertificatePath
+                $connectParams['CertificatePassword'] = $CertificatePassword
+            }
         }
         $context = Connect-EntraGraphSession @connectParams
 
