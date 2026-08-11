@@ -232,7 +232,7 @@ Copy-EntraUser -TemplateUserId 'template.user@contoso.onmicrosoft.com' `
 
 **What happens:**
 - `-NewUser` and `-NewUserPrincipalName` (with its companion parameters) are mutually exclusive — supply one style or the other, not both, and one of them is required
-- `-NewUserPassword` is optional; if omitted, a random password is generated with a cryptographically secure random number generator and **is never displayed, returned, or logged anywhere** — you'll need a separate flow (e.g. Entra's Temporary Access Pass, self-service password reset, or an admin password reset) to get the new user signed in
+- `-NewUserPassword` is optional; if omitted, a random password is generated with a cryptographically secure random number generator and **is never displayed, returned, or logged by default** — see "Retrieving the generated password" below for the one supported way to get it back
 - The generated password sets `ForceChangePasswordNextSignIn`, so it only ever needs to work for a single first sign-in
 - `-NewUserAccountEnabled` defaults to `$true`; pass `-NewUserAccountEnabled:$false` to create a disabled account
 - To supply your own password instead of auto-generating one:
@@ -243,6 +243,23 @@ Copy-EntraUser -TemplateUserId 'template.user@contoso.onmicrosoft.com' `
       -NewUserMailNickname 'new.hire' `
       -NewUserPassword (Read-Host -AsSecureString 'Password for the new user')
   ```
+
+#### Retrieving the generated password
+
+By default, `Copy-EntraUser` produces no pipeline output at all, and an auto-generated password cannot be recovered afterward — this is deliberate: console output can end up in terminal scrollback, screen recordings, or shared session logs. If you need to see the generated password (e.g. to hand it to the new user yourself), pass `-PassThru`:
+
+```powershell
+$result = Copy-EntraUser -TemplateUserId 'template.user@contoso.onmicrosoft.com' `
+    -NewUserPrincipalName 'new.hire@contoso.onmicrosoft.com' `
+    -NewUserDisplayName 'New Hire' `
+    -NewUserMailNickname 'new.hire' `
+    -PassThru
+
+$result.NewUserId          # the new user's Object ID
+$result.GeneratedPassword  # the auto-generated password, as plain text
+```
+
+`GeneratedPassword` is `$null` whenever you supplied your own `-NewUserPassword`, or used `-NewUser` instead of the named parameters — it's only populated when `Copy-EntraUser` generated the password itself. `-PassThru` is opt-in per invocation; nothing changes for existing callers who don't pass it.
 
 ## How Copy-EntraUser Works
 
