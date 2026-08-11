@@ -135,11 +135,22 @@ Describe 'Connect-EntraGraphSession' {
     }
 
     Context 'Certificate parameters supplied but TenantId/ClientId missing' {
-        It 'Throws an actionable error before attempting to connect' {
+        It 'Throws an actionable error before attempting to connect (Thumbprint set)' {
             InModuleScope -ModuleName $script:dscModuleName {
                 Mock Connect-MgGraph { }
 
                 { Connect-EntraGraphSession -CertificateThumbprint 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' } |
+                    Should -Throw '*TenantId*ClientId*'
+                Should -Invoke Connect-MgGraph -Times 0
+            }
+        }
+
+        It 'Throws an actionable error before attempting to connect (CertificateFile set)' {
+            InModuleScope -ModuleName $script:dscModuleName {
+                Mock Connect-MgGraph { }
+
+                { Connect-EntraGraphSession -CertificatePath 'x.pfx' `
+                        -CertificatePassword (ConvertTo-SecureString 'placeholder' -AsPlainText -Force) } |
                     Should -Throw '*TenantId*ClientId*'
                 Should -Invoke Connect-MgGraph -Times 0
             }

@@ -127,6 +127,16 @@ Describe 'Copy-EntraUser' {
         }
     }
 
+    It 'Forwards -CertificateThumbprint (and only the thumbprint, never a certificate path) to Connect-EntraGraphSession' {
+        Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' -NewUser 'b@contoso.onmicrosoft.com' `
+            -TenantId '00000000-0000-0000-0000-000000000000' -ClientId '00000000-0000-0000-0000-000000000001' `
+            -CertificateThumbprint 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' -Confirm:$false
+
+        Should -Invoke Connect-EntraGraphSession -Times 1 -ModuleName $script:dscModuleName -ParameterFilter {
+            $CertificateThumbprint -eq 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' -and $null -eq $CertificatePath
+        }
+    }
+
     Context 'M7: delegated session is disconnected even when a mutation throws' {
         It 'Still calls Disconnect-MgGraph when Add-EntraGroupMembership throws' {
             Mock Connect-EntraGraphSession { [pscustomobject]@{ AuthType = 'Delegated' } } -ModuleName $script:dscModuleName

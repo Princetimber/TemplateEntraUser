@@ -52,7 +52,7 @@ Three modes are available via `Connect-EntraGraphSession`:
 
 3. **Interactive sign-in, no certificate** (default when no certificate parameter is supplied)
    - Omit `-CertificateThumbprint`, `-CertificatePath`, and `-CertificatePassword` entirely
-   - `-TenantId` and `-ClientId` are both optional here — Graph prompts for a tenant, and uses its default client registration, when they're omitted
+   - `-TenantId` and `-ClientId` are both optional here — when omitted, `Connect-MgGraph` resolves the tenant from the signing-in account and uses its own default client registration
    - Useful when you don't yet have (or don't want to set up) an app registration and certificate
 
 ### Fallback Behavior
@@ -210,11 +210,12 @@ Copy-EntraUser -TemplateUserId 'template.user@contoso.onmicrosoft.com' -NewUser 
 **What happens:**
 - No certificate-based attempt is made at all, and no fallback warning is shown — there's nothing to fall back from
 - The function connects interactively, prompting you to sign in
-- `-TenantId`/`-ClientId` are optional here; supply either or both if you want to target a specific tenant or app registration, e.g.:
+- `-TenantId`/`-ClientId` are optional here; supply `-TenantId` if you want to restrict sign-in to a specific tenant, e.g.:
   ```powershell
   Copy-EntraUser -TemplateUserId 'template.user@contoso.onmicrosoft.com' -NewUser 'new.hire@contoso.onmicrosoft.com' `
       -TenantId '00000000-0000-0000-0000-000000000000'
   ```
+  Only supply `-ClientId` here if you have a separate app registration configured for **delegated** (interactive) sign-in with the required scopes consented — the same app registration used for certificate-based auth is typically confidential-client-only and will not work for interactive sign-in.
 - Interactive sign-in explicitly requests the three required scopes (not relying on cached consent)
 - Clones the template user's group memberships and PIM eligibility to the target user
 
