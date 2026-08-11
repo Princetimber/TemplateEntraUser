@@ -1,6 +1,6 @@
 # Copy-EntraUser
 
-A production-ready PowerShell module, built with the [Sampler](https://github.com/gaelcolas/Sampler) framework, that clones an Entra ID user's direct group memberships and PIM-for-Groups eligible assignments onto a new or existing user — mirroring the template user's access tier without ever granting a permanent membership where the template only held PIM eligibility.
+A production-ready PowerShell module, built with the [Sampler](https://github.com/gaelcolas/Sampler) framework, that clones an Entra ID user's direct group memberships, PIM-for-Groups eligible assignments, and PIM directory role eligibility onto a new or existing user — mirroring the template user's access tier without ever granting a permanent membership or standing role assignment where the template only held PIM eligibility.
 
 ## Features
 
@@ -69,7 +69,7 @@ Interactive sign-in (whether reached via fallback or directly) requests explicit
 
 ## Required Graph Permissions
 
-The `Copy-EntraUser` function requires three Microsoft Graph permissions. Both application permissions (CBA) and delegated scopes (interactive fallback) use the same set:
+The `Copy-EntraUser` function requires five Microsoft Graph permissions. Both application permissions (CBA) and delegated scopes (interactive fallback) use the same set:
 
 ### Application Permissions (Certificate-Based Auth)
 
@@ -78,6 +78,8 @@ The `Copy-EntraUser` function requires three Microsoft Graph permissions. Both a
 | `User.ReadWrite.All` | Read and write all user properties and group memberships |
 | `GroupMember.ReadWrite.All` | Read and write group membership for all groups |
 | `PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup` | Read and write PIM-for-Groups eligibility schedule assignments |
+| `RoleEligibilitySchedule.ReadWrite.Directory` | Read and write PIM directory role eligibility schedule assignments |
+| `RoleAssignmentSchedule.Read.Directory` | Read active directory role assignment schedule instances (to detect and skip permanent, non-PIM role assignments) |
 
 ### Delegated Scopes (Interactive Auth)
 
@@ -86,8 +88,10 @@ The `Copy-EntraUser` function requires three Microsoft Graph permissions. Both a
 | `User.ReadWrite.All` | Read and write all user properties and group memberships |
 | `GroupMember.ReadWrite.All` | Read and write group membership for all groups |
 | `PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup` | Read and write PIM-for-Groups eligibility schedule assignments |
+| `RoleEligibilitySchedule.ReadWrite.Directory` | Read and write PIM directory role eligibility schedule assignments |
+| `RoleAssignmentSchedule.Read.Directory` | Read active directory role assignment schedule instances (to detect and skip permanent, non-PIM role assignments) |
 
-> **Note:** Both tables list the exact same three permissions. The source of truth is the `Get-RequiredGraphPermission` function, which ensures both CBA and interactive auth paths remain in sync and cannot drift.
+> **Note:** Both tables list the exact same five permissions. The source of truth is the `Get-RequiredGraphPermission` function, which ensures both CBA and interactive auth paths remain in sync and cannot drift.
 
 ## Directory Structure
 

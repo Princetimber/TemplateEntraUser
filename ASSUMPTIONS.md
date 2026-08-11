@@ -53,13 +53,15 @@ The correct Microsoft Graph permission name is **`PrivilegedEligibilitySchedule.
 
 ### Full Permission Set
 
-The function requires **three permissions** for both certificate-based app-only authentication and interactive delegated sign-in:
+The function requires **five permissions** for both certificate-based app-only authentication and interactive delegated sign-in:
 
 | Permission | Description |
 |-----------|-------------|
 | `User.ReadWrite.All` | Read and write all user properties |
 | `GroupMember.ReadWrite.All` | Read and write group membership |
 | `PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup` | Read and write PIM-for-Groups eligibility |
+| `RoleEligibilitySchedule.ReadWrite.Directory` | Read and write PIM directory role eligibility |
+| `RoleAssignmentSchedule.Read.Directory` | Detect (read-only) permanent, non-PIM directory role assignments so they can be skipped with a warning |
 
 These are already listed in the module's `README.md` and implemented in the `Get-RequiredGraphPermission` function. Both CBA and interactive auth use the same set.
 

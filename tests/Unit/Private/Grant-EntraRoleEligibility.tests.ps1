@@ -33,10 +33,10 @@ Describe 'Grant-EntraRoleEligibility' {
                 Mock New-MgRoleManagementDirectoryRoleEligibilityScheduleRequest { }
 
                 Grant-EntraRoleEligibility -RoleDefinitionId '66666666-6666-6666-6666-666666666666' `
-                    -NewUserId '00000000-0000-0000-0000-000000000004' -DirectoryScopeId '/' -Confirm:$false
+                    -NewUserId '00000000-0000-0000-0000-000000000004' -DirectoryScopeId '/administrativeUnits/88888888-8888-8888-8888-888888888888' -Confirm:$false
 
                 Should -Invoke New-MgRoleManagementDirectoryRoleEligibilityScheduleRequest -Times 1 -ParameterFilter {
-                    $BodyParameter.directoryScopeId -eq '/'
+                    $BodyParameter.directoryScopeId -eq '/administrativeUnits/88888888-8888-8888-8888-888888888888'
                 }
             }
         }
