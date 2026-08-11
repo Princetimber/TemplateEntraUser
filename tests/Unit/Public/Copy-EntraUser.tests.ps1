@@ -26,6 +26,14 @@ Describe 'Copy-EntraUser' {
         } -ModuleName $script:dscModuleName
         Mock Add-EntraGroupMembership { } -ModuleName $script:dscModuleName
         Mock Grant-EntraGroupEligibility { } -ModuleName $script:dscModuleName
+        Mock Get-EntraTemplateRoleAssignment {
+            @{
+                EligibilitySchedule      = @()
+                ActiveAssignmentSchedule = @()
+                RoleDefinitionById       = @{}
+            }
+        } -ModuleName $script:dscModuleName
+        Mock Grant-EntraRoleEligibility { } -ModuleName $script:dscModuleName
         Mock Disconnect-MgGraph { } -ModuleName $script:dscModuleName
         Mock New-EntraUserPassword { ConvertTo-SecureString -String 'AutoGenPlaceholder1' -AsPlainText -Force } -ModuleName $script:dscModuleName
     }
@@ -101,6 +109,85 @@ Describe 'Copy-EntraUser' {
                 $GroupId -eq '55555555-5555-5555-5555-555555555555' -and $AccessId -eq 'owner'
             }
             Should -Invoke Add-EntraGroupMembership -Times 0 -ModuleName $script:dscModuleName
+        }
+    }
+
+    Context 'C2: PIM directory role eligibility is cloned end-to-end' {
+        BeforeAll {
+            Mock Get-EntraTemplateRoleAssignment {
+                @{
+                    EligibilitySchedule      = @([pscustomobject]@{
+                            RoleDefinitionId = '66666666-6666-6666-6666-666666666666'
+                            DirectoryScopeId = '/'
+                            MemberType       = 'Direct'
+                        })
+                    ActiveAssignmentSchedule = @()
+                    RoleDefinitionById       = @{ '66666666-6666-6666-6666-666666666666' = 'Helpdesk Administrator' }
+                }
+            } -ModuleName $script:dscModuleName
+        }
+
+        It 'Grants PIM role eligibility for a directly-assigned, tenant-wide eligible role' {
+            Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' -NewUser 'b@contoso.onmicrosoft.com' `
+                -TenantId '00000000-0000-0000-0000-000000000000' -ClientId '00000000-0000-0000-0000-000000000001' `
+                -CertificatePath 'x.pfx' -CertificatePassword (ConvertTo-SecureString 'x' -AsPlainText -Force) -Confirm:$false
+            Should -Invoke Grant-EntraRoleEligibility -Times 1 -ModuleName $script:dscModuleName -ParameterFilter {
+                $RoleDefinitionId -eq '66666666-6666-6666-6666-666666666666' -and $DirectoryScopeId -eq '/'
+            }
+        }
+
+        It 'Does not grant role eligibility under -WhatIf' {
+            Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' -NewUser 'b@contoso.onmicrosoft.com' `
+                -TenantId '00000000-0000-0000-0000-000000000000' -ClientId '00000000-0000-0000-0000-000000000001' `
+                -CertificatePath 'x.pfx' -CertificatePassword (ConvertTo-SecureString 'x' -AsPlainText -Force) -WhatIf
+            Should -Invoke Grant-EntraRoleEligibility -Times 0 -ModuleName $script:dscModuleName
+        }
+    }
+
+    Context 'C3: unsupported role assignments are skipped with a warning, never granted' {
+        It 'Skips an Administrative Unit-scoped role eligibility with a warning' {
+            Mock Get-EntraTemplateRoleAssignment {
+                @{
+                    EligibilitySchedule      = @([pscustomobject]@{
+                            RoleDefinitionId = '77777777-7777-7777-7777-777777777777'
+                            DirectoryScopeId = '/administrativeUnits/88888888-8888-8888-8888-888888888888'
+                            MemberType       = 'Direct'
+                        })
+                    ActiveAssignmentSchedule = @()
+                    RoleDefinitionById       = @{ '77777777-7777-7777-7777-777777777777' = 'User Administrator' }
+                }
+            } -ModuleName $script:dscModuleName
+
+            $null = Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' -NewUser 'b@contoso.onmicrosoft.com' `
+                -TenantId '00000000-0000-0000-0000-000000000000' -ClientId '00000000-0000-0000-0000-000000000001' `
+                -CertificatePath 'x.pfx' -CertificatePassword (ConvertTo-SecureString 'x' -AsPlainText -Force) `
+                -Confirm:$false -WarningVariable capturedWarnings -WarningAction SilentlyContinue
+
+            $capturedWarnings | Should -Not -BeNullOrEmpty
+            Should -Invoke Grant-EntraRoleEligibility -Times 0 -ModuleName $script:dscModuleName
+        }
+
+        It 'Skips a permanent (non-PIM) role assignment with a warning' {
+            Mock Get-EntraTemplateRoleAssignment {
+                @{
+                    EligibilitySchedule      = @()
+                    ActiveAssignmentSchedule = @([pscustomobject]@{
+                            RoleDefinitionId = '99999999-9999-9999-9999-999999999999'
+                            DirectoryScopeId = '/'
+                            MemberType       = 'Direct'
+                            AssignmentType   = 'Assigned'
+                        })
+                    RoleDefinitionById       = @{ '99999999-9999-9999-9999-999999999999' = 'Global Reader' }
+                }
+            } -ModuleName $script:dscModuleName
+
+            $null = Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' -NewUser 'b@contoso.onmicrosoft.com' `
+                -TenantId '00000000-0000-0000-0000-000000000000' -ClientId '00000000-0000-0000-0000-000000000001' `
+                -CertificatePath 'x.pfx' -CertificatePassword (ConvertTo-SecureString 'x' -AsPlainText -Force) `
+                -Confirm:$false -WarningVariable capturedWarnings -WarningAction SilentlyContinue
+
+            $capturedWarnings | Should -Not -BeNullOrEmpty
+            Should -Invoke Grant-EntraRoleEligibility -Times 0 -ModuleName $script:dscModuleName
         }
     }
 

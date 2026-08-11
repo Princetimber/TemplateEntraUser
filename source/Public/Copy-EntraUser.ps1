@@ -1,9 +1,9 @@
 function Copy-EntraUser {
     <#
     .SYNOPSIS
-        Clones an Entra ID user's direct group memberships and PIM-for-Groups
-        eligible assignments from a template user onto a new or existing
-        target user.
+        Clones an Entra ID user's direct group memberships, PIM-for-Groups
+        eligible assignments, and PIM directory role eligible assignments
+        from a template user onto a new or existing target user.
     .DESCRIPTION
         Resolves the template user and the target user, enumerates the
         template user's direct (non-transitive) group memberships and
@@ -15,6 +15,14 @@ function Copy-EntraUser {
         tier (member vs owner). Dynamic-membership and role-assignable
         groups found in the template user's direct memberships are skipped
         with a named Write-Warning rather than cloned or silently dropped.
+
+        Separately, enumerates the template user's directly-assigned (never
+        inherited via a group or an Administrative Unit) PIM directory role
+        eligibility schedule instances scoped tenant-wide, and grants an
+        ELIGIBLE (never active/permanent) PIM directory role assignment for
+        each one. Administrative Unit-scoped role eligibilities and
+        permanent (non-PIM) role assignments are skipped with a named
+        Write-Warning rather than cloned or silently dropped.
 
         Authenticates via certificate-based app-only auth when a certificate
         is supplied, falling back automatically to interactive delegated
@@ -88,6 +96,8 @@ function Copy-EntraUser {
             - User.ReadWrite.All
             - GroupMember.ReadWrite.All
             - PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup
+            - RoleEligibilitySchedule.ReadWrite.Directory
+            - RoleAssignmentSchedule.Read.Directory
 
         Delegated scopes required (interactive fallback path; passed
         explicitly to Connect-MgGraph -Scopes, never relying on cached
@@ -95,6 +105,13 @@ function Copy-EntraUser {
             - User.ReadWrite.All
             - GroupMember.ReadWrite.All
             - PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup
+            - RoleEligibilitySchedule.ReadWrite.Directory
+            - RoleAssignmentSchedule.Read.Directory
+
+        RoleAssignmentSchedule.Read.Directory is read-only and used solely
+        to detect permanent (non-PIM) directory role assignments so they
+        can be skipped with a warning instead of silently cloned as
+        standing access.
 
         Verb choice: Copy- (approved verb) was chosen over New- because this
         function's defining behaviour is replicating an existing principal's
@@ -250,13 +267,26 @@ function Copy-EntraUser {
                 Write-Warning "Skipped group '$($group.DisplayName)' ($($group.Id)): dynamic-membership or role-assignable groups are not cloned by Copy-EntraUser."
             }
 
-            if ($PSCmdlet.ShouldProcess($newUserObject.Id, "Clone group memberships and PIM-for-Groups eligibility from '$TemplateUserId'")) {
+            $roleAssignment = Get-EntraTemplateRoleAssignment -TemplateUserId $templateUser.Id
+            $roleSplit = Split-EntraRoleAssignment -EligibilitySchedule $roleAssignment.EligibilitySchedule `
+                -ActiveAssignmentSchedule $roleAssignment.ActiveAssignmentSchedule `
+                -RoleDefinitionById $roleAssignment.RoleDefinitionById
+
+            foreach ($role in $roleSplit.UnsupportedRole) {
+                Write-Warning "Skipped role '$($role.DisplayName)' ($($role.RoleDefinitionId)): $($role.Reason)"
+            }
+
+            if ($PSCmdlet.ShouldProcess($newUserObject.Id, "Clone group memberships, PIM-for-Groups eligibility, and PIM directory role eligibility from '$TemplateUserId'")) {
                 foreach ($group in $split.PlainGroup) {
                     Add-EntraGroupMembership -GroupId $group.Id -NewUserId $newUserObject.Id
                 }
 
                 foreach ($group in $split.PimGroup) {
                     Grant-EntraGroupEligibility -GroupId $group.Id -NewUserId $newUserObject.Id -AccessId $group.AccessId
+                }
+
+                foreach ($role in $roleSplit.PimRole) {
+                    Grant-EntraRoleEligibility -RoleDefinitionId $role.RoleDefinitionId -NewUserId $newUserObject.Id -DirectoryScopeId $role.DirectoryScopeId
                 }
             }
         }
