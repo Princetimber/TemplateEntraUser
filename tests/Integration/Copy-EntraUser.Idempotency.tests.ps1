@@ -110,6 +110,14 @@ Describe 'Copy-EntraUser end-to-end idempotency' -Tag 'Integration' {
             throw 'MUTATION SHOULD NEVER BE CALLED: New-MgIdentityGovernancePrivilegedAccessGroupEligibilityScheduleRequest'
         } -ModuleName $script:dscModuleName
         Mock Disconnect-MgGraph { } -ModuleName $script:dscModuleName
+        # No directory-role PIM eligibility/active assignments for this
+        # scenario -- Get-EntraTemplateRoleAssignment now hard-fails (rather
+        # than silently continuing) on an unmocked/unauthenticated Graph
+        # call per its own error-handling contract, so these must be mocked
+        # explicitly even though this scenario has nothing to exercise there.
+        Mock Get-MgRoleManagementDirectoryRoleEligibilityScheduleInstance { @() } -ModuleName $script:dscModuleName
+        Mock Get-MgRoleManagementDirectoryRoleAssignmentScheduleInstance { @() } -ModuleName $script:dscModuleName
+        Mock Write-ToLog { } -ModuleName $script:dscModuleName
     }
 
     It 'Makes zero mutating Graph calls when the target user is already fully provisioned' {

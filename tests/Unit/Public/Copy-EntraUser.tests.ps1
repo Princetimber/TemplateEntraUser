@@ -36,6 +36,7 @@ Describe 'Copy-EntraUser' {
         Mock Grant-EntraRoleEligibility { } -ModuleName $script:dscModuleName
         Mock Disconnect-MgGraph { } -ModuleName $script:dscModuleName
         Mock New-EntraUserPassword { ConvertTo-SecureString -String 'AutoGenPlaceholder1' -AsPlainText -Force } -ModuleName $script:dscModuleName
+        Mock Write-ToLog { } -ModuleName $script:dscModuleName
     }
 
     It 'Requires -TemplateUserId; -NewUser and the named new-user parameters are all optional individually (validated at runtime instead)' {
@@ -74,11 +75,33 @@ Describe 'Copy-EntraUser' {
         Should -Invoke Add-EntraGroupMembership -Times 2 -ModuleName $script:dscModuleName
     }
 
-    It 'Supports -WhatIf without connecting or mutating' {
+    It 'Supports -WhatIf without mutating (a live Graph session is still established to resolve/enumerate)' {
         Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' -NewUser 'b@contoso.onmicrosoft.com' `
             -TenantId '00000000-0000-0000-0000-000000000000' -ClientId '00000000-0000-0000-0000-000000000001' `
             -CertificatePath 'x.pfx' -CertificatePassword (ConvertTo-SecureString 'x' -AsPlainText -Force) -WhatIf
         Should -Invoke Add-EntraGroupMembership -Times 0 -ModuleName $script:dscModuleName
+    }
+
+    Context 'M8: Connect-EntraGraphSession and Test-RequiredGraphModule run exactly once per invocation, even across multiple pipeline items' {
+        It 'Connects and disconnects exactly once when multiple -NewUser objects are piped in' {
+            'b1@contoso.onmicrosoft.com', 'b2@contoso.onmicrosoft.com' | Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' `
+                -TenantId '00000000-0000-0000-0000-000000000000' -ClientId '00000000-0000-0000-0000-000000000001' `
+                -CertificatePath 'x.pfx' -CertificatePassword (ConvertTo-SecureString 'x' -AsPlainText -Force) -Confirm:$false
+
+            Should -Invoke Connect-EntraGraphSession -Times 1 -ModuleName $script:dscModuleName
+            Should -Invoke Test-RequiredGraphModule -Times 1 -ModuleName $script:dscModuleName
+            Should -Invoke Add-EntraGroupMembership -Times 2 -ModuleName $script:dscModuleName
+        }
+
+        It 'Disconnects exactly once (Delegated session) after processing multiple piped items' {
+            Mock Connect-EntraGraphSession { [pscustomobject]@{ AuthType = 'Delegated' } } -ModuleName $script:dscModuleName
+
+            'b1@contoso.onmicrosoft.com', 'b2@contoso.onmicrosoft.com' | Copy-EntraUser -TemplateUserId 'a@contoso.onmicrosoft.com' `
+                -TenantId '00000000-0000-0000-0000-000000000000' -ClientId '00000000-0000-0000-0000-000000000001' `
+                -CertificatePath 'x.pfx' -CertificatePassword (ConvertTo-SecureString 'x' -AsPlainText -Force) -Confirm:$false
+
+            Should -Invoke Disconnect-MgGraph -Times 1 -ModuleName $script:dscModuleName
+        }
     }
 
     Context 'C1: eligibility-only groups are still cloned end-to-end' {

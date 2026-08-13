@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `RoleManagement.Read.Directory` to `Get-RequiredGraphPermission` (now
+  six permissions total), matching the Microsoft Graph requirement for
+  `Get-MgRoleManagementDirectoryRoleDefinition` ("List roleDefinitions").
+  Updated the `.NOTES` permission tables in `Copy-EntraUser.ps1` and
+  `README.md` to match.
+- Added a shared private retry helper, `Invoke-EntraGraphRequestWithRetry`,
+  that honors the `Retry-After` header with exponential backoff for Graph
+  429 (throttled) / 503 (unavailable) responses, and wired it around the
+  Graph SDK calls in `Add-EntraGroupMembership`, `Grant-EntraGroupEligibility`,
+  `Grant-EntraRoleEligibility`, `Get-EntraTemplateGroupMembership`,
+  `Get-EntraTemplateRoleAssignment`, `Resolve-EntraNewUser`, and
+  `Resolve-EntraTemplateUser`.
+- Added a shared private helper, `ConvertTo-EscapedODataString`, and applied
+  it consistently everywhere a variable is interpolated into a Graph
+  `-Filter` string (previously only `Resolve-EntraNewUser` escaped).
+- `Copy-EntraUser` now emits structured `Write-ToLog` entries (INFO/WARN/
+  SUCCESS) around connect/disconnect and each clone action, alongside the
+  existing `Write-Verbose`/`Write-Warning` streams.
+
+### Changed
+
+- `Copy-EntraUser` now connects to Microsoft Graph once in `begin {}` and
+  disconnects once in `end {}` (or immediately on error), instead of
+  reconnecting/disconnecting for every pipelined `-NewUser` object.
+- `Connect-EntraGraphSession` no longer declares `SupportsShouldProcess`:
+  `Connect-` is not a state-changing verb per this project's convention, so
+  it now always attempts the connection it was called to make.
+- `Add-EntraGroupMembership` now performs a targeted `Get-MgGroupMember
+  -Filter "id eq '...'"` lookup instead of fetching the entire group
+  membership with `-All`.
+- `New-EntraUserPassword` now guarantees at least one uppercase, lowercase,
+  digit, and symbol character, then Fisher-Yates shuffles the full
+  character array (using the same CSPRNG) before building the
+  `SecureString`.
+- `Grant-EntraGroupEligibility` and `Grant-EntraRoleEligibility` now use
+  `(Get-Date).ToUniversalTime()` for `startDateTime` instead of local time.
+  PIM eligibility expiration remains intentionally normalized to
+  `NoExpiration` rather than mirrored from the template user -- see the
+  updated comment-based help in both files and in `Copy-EntraUser.ps1` for
+  the rationale.
+- Added `try`/`catch` with actionable error messages around the remaining
+  unprotected Graph-mutating calls in `Add-EntraGroupMembership`,
+  `Grant-EntraGroupEligibility`, `Grant-EntraRoleEligibility`,
+  `Get-EntraTemplateGroupMembership`, and `Get-EntraTemplateRoleAssignment`.
+- Added `[ValidateNotNullOrEmpty()]` to mandatory string ID parameters that
+  were missing it across `source/Private/*.ps1`.
+
 - `Copy-EntraUser` now also clones the template user's directly-assigned,
   PIM-eligible directory role assignments onto the new/target user, as an
   ELIGIBLE (never active/permanent) grant — mirroring the existing
