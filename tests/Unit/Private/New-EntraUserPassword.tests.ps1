@@ -43,6 +43,18 @@ Describe 'New-EntraUserPassword' {
         }
     }
 
+    It 'Always includes at least one character from each required class (uppercase, lowercase, digit, symbol)' {
+        InModuleScope -ModuleName $script:dscModuleName {
+            1..25 | ForEach-Object {
+                $plainText = [System.Net.NetworkCredential]::new('', (New-EntraUserPassword)).Password
+                $plainText | Should -Match '[A-Z]'
+                $plainText | Should -Match '[a-z]'
+                $plainText | Should -Match '[0-9]'
+                $plainText | Should -Match '[!#$%]'
+            }
+        }
+    }
+
     It 'Rejects a length below the minimum' {
         InModuleScope -ModuleName $script:dscModuleName {
             { New-EntraUserPassword -Length 4 } | Should -Throw

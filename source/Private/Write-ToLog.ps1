@@ -10,21 +10,8 @@ $script:LogTimestampFormat = 'yyyyMMdd_HHmmss'
 # LOG FILE CONFIGURATION
 # ============================================================================
 
-# Initialize log file path (backward compatible with $Global:LogFile)
-# Uses helper function to isolate global variable access for ScriptAnalyzer compliance.
-function Initialize-LogFilePath {
-    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidGlobalVars', '',
-        Justification = 'Required for backward compatibility with scripts that set $Global:LogFile before importing the module.')]
-    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '',
-        Justification = 'Private initializer - no external side effects, only sets module-scoped variable.')]
-    [OutputType([string])]
-    param()
-
-    if (-not $Global:LogFile) {
-        $Global:LogFile = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), "Copy-EntraUser_$([System.DateTimeOffset]::UtcNow.ToString($script:LogTimestampFormat)).log")
-    }
-    return $Global:LogFile
-}
+# Initialize-LogFilePath, defined in its own file (source/Private/Initialize-LogFilePath.ps1),
+# is used immediately below to set the initial module-scoped log file path.
 
 if (-not $script:LogFile) {
     $script:LogFile = Initialize-LogFilePath
@@ -262,78 +249,7 @@ Inner Exception: $($ErrorRecord.Exception.InnerException.Message)
     }
 }
 
-# ============================================================================
-# WRAPPER FUNCTIONS FOR MOCKABILITY
-# ============================================================================
-
-# Wraps Test-Path for Pester mocking.
-function Test-PathWrapper {
-    [CmdletBinding()]
-    [OutputType([bool])]
-    param(
-        [Parameter(Mandatory, ParameterSetName = 'Path')]
-        [string]
-        $Path,
-
-        [Parameter(Mandatory, ParameterSetName = 'LiteralPath')]
-        [string]
-        $LiteralPath,
-
-        [Parameter(ParameterSetName = 'Path')]
-        [ValidateSet('Any', 'Container', 'Leaf')]
-        [string]
-        $PathType
-    )
-
-    if ($PSCmdlet.ParameterSetName -eq 'LiteralPath') {
-        return Test-Path -LiteralPath $LiteralPath
-    }
-
-    if ($PathType) {
-        return Test-Path -Path $Path -PathType $PathType
-    }
-
-    return Test-Path -Path $Path
-}
-
-# Wraps New-Item -ItemType Directory for Pester mocking.
-function New-ItemDirectoryWrapper {
-    [CmdletBinding()]
-    [OutputType([System.IO.DirectoryInfo])]
-    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '',
-        Justification = 'Wrapper function; ShouldProcess handled by calling function.')]
-    param(
-        [Parameter(Mandatory)]
-        [string]$Path
-    )
-
-    return New-Item -Path $Path -ItemType Directory -Force -ErrorAction Stop
-}
-
-# Wraps Get-Item for Pester mocking.
-function Get-ItemWrapper {
-    [CmdletBinding()]
-    [OutputType([System.IO.FileInfo])]
-    param(
-        [Parameter(Mandatory)]
-        [string]$LiteralPath
-    )
-
-    return Get-Item -LiteralPath $LiteralPath
-}
-
-# Wraps Add-Content for Pester mocking.
-function Add-ContentWrapper {
-    [CmdletBinding()]
-    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '',
-        Justification = 'Wrapper function; ShouldProcess handled by calling function.')]
-    param(
-        [Parameter(Mandatory)]
-        [string]$LiteralPath,
-
-        [Parameter(Mandatory)]
-        [string]$Value
-    )
-
-    Add-Content -LiteralPath $LiteralPath -Value $Value -ErrorAction Stop
-}
+# Test-PathWrapper, New-ItemDirectoryWrapper, Get-ItemWrapper, and
+# Add-ContentWrapper (used above for Pester mockability) now live in their
+# own files under source/Private/, per the project's one-function-per-file
+# convention.

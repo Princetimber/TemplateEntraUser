@@ -10,6 +10,17 @@ AfterAll {
 }
 
 Describe 'Connect-EntraGraphSession' {
+    BeforeAll {
+        Mock Write-ToLog { } -ModuleName $script:dscModuleName
+    }
+
+    It 'Does not declare SupportsShouldProcess -- Connect- is not a state-changing verb per project convention' {
+        InModuleScope -ModuleName $script:dscModuleName {
+            (Get-Command Connect-EntraGraphSession).Parameters.Keys | Should -Not -Contain 'WhatIf'
+            (Get-Command Connect-EntraGraphSession).Parameters.Keys | Should -Not -Contain 'Confirm'
+        }
+    }
+
     Context 'CBA succeeds via portable certificate file' {
         It 'Connects with -Certificate and does not fall back' {
             # Generate a real, loadable self-signed PFX so the portable
@@ -70,22 +81,6 @@ Describe 'Connect-EntraGraphSession' {
                 $warnings.Message -join ' ' | Should -Match 'fallback|interactive'
                 Should -Invoke Connect-MgGraph -Times 1 -ParameterFilter { $null -ne $Scopes }
                 Compare-Object $script:capturedScopes (Get-RequiredGraphPermission) | Should -BeNullOrEmpty
-            }
-        }
-    }
-
-    Context '-WhatIf prevents any live connection' {
-        It 'Calls neither the CBA attempt nor the interactive fallback' {
-            InModuleScope -ModuleName $script:dscModuleName {
-                Mock Connect-MgGraph { }
-                Mock Get-MgContext { [pscustomobject]@{ AuthType = 'None' } }
-
-                Connect-EntraGraphSession -TenantId '00000000-0000-0000-0000-000000000000' `
-                    -ClientId '00000000-0000-0000-0000-000000000001' `
-                    -CertificateThumbprint 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' `
-                    -WhatIf
-
-                Should -Invoke Connect-MgGraph -Times 0
             }
         }
     }

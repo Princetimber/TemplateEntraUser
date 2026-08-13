@@ -69,7 +69,7 @@ Interactive sign-in (whether reached via fallback or directly) requests explicit
 
 ## Required Graph Permissions
 
-The `Copy-EntraUser` function requires five Microsoft Graph permissions. Both application permissions (CBA) and delegated scopes (interactive fallback) use the same set:
+The `Copy-EntraUser` function requires six Microsoft Graph permissions. Both application permissions (CBA) and delegated scopes (interactive fallback) use the same set:
 
 ### Application Permissions (Certificate-Based Auth)
 
@@ -80,6 +80,7 @@ The `Copy-EntraUser` function requires five Microsoft Graph permissions. Both ap
 | `PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup` | Read and write PIM-for-Groups eligibility schedule assignments |
 | `RoleEligibilitySchedule.ReadWrite.Directory` | Read and write PIM directory role eligibility schedule assignments |
 | `RoleAssignmentSchedule.Read.Directory` | Read active directory role assignment schedule instances (to detect and skip permanent, non-PIM role assignments) |
+| `RoleManagement.Read.Directory` | Read directory role definitions (to resolve role display names for warning messages) |
 
 ### Delegated Scopes (Interactive Auth)
 
@@ -90,8 +91,9 @@ The `Copy-EntraUser` function requires five Microsoft Graph permissions. Both ap
 | `PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup` | Read and write PIM-for-Groups eligibility schedule assignments |
 | `RoleEligibilitySchedule.ReadWrite.Directory` | Read and write PIM directory role eligibility schedule assignments |
 | `RoleAssignmentSchedule.Read.Directory` | Read active directory role assignment schedule instances (to detect and skip permanent, non-PIM role assignments) |
+| `RoleManagement.Read.Directory` | Read directory role definitions (to resolve role display names for warning messages) |
 
-> **Note:** Both tables list the exact same five permissions. The source of truth is the `Get-RequiredGraphPermission` function, which ensures both CBA and interactive auth paths remain in sync and cannot drift.
+> **Note:** Both tables list the exact same six permissions. The source of truth is the `Get-RequiredGraphPermission` function, which ensures both CBA and interactive auth paths remain in sync and cannot drift.
 
 ## Directory Structure
 

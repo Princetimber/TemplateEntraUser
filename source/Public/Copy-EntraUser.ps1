@@ -98,6 +98,7 @@ function Copy-EntraUser {
             - PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup
             - RoleEligibilitySchedule.ReadWrite.Directory
             - RoleAssignmentSchedule.Read.Directory
+            - RoleManagement.Read.Directory
 
         Delegated scopes required (interactive fallback path; passed
         explicitly to Connect-MgGraph -Scopes, never relying on cached
@@ -107,11 +108,26 @@ function Copy-EntraUser {
             - PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup
             - RoleEligibilitySchedule.ReadWrite.Directory
             - RoleAssignmentSchedule.Read.Directory
+            - RoleManagement.Read.Directory
 
         RoleAssignmentSchedule.Read.Directory is read-only and used solely
         to detect permanent (non-PIM) directory role assignments so they
         can be skipped with a warning instead of silently cloned as
         standing access.
+
+        RoleManagement.Read.Directory is read-only and used solely by
+        Get-MgRoleManagementDirectoryRoleDefinition to resolve directory
+        role display names for warning messages.
+
+        PIM-for-Groups and PIM directory role eligibility grants always use
+        an expiration type of 'NoExpiration', regardless of whether the
+        template user's own eligibility carried an end date. Expiration is
+        deliberately normalized rather than mirrored: an eligibility end
+        date reflects the template principal's own circumstances (e.g. a
+        fixed-term project or contract) and would be semantically wrong to
+        silently carry onto an unrelated new principal. Operators who need
+        a bounded eligibility window should apply one deliberately after
+        cloning, via PIM itself.
 
         Verb choice: Copy- (approved verb) was chosen over New- because this
         function's defining behaviour is replicating an existing principal's
@@ -203,9 +219,25 @@ function Copy-EntraUser {
         [securestring] $CertificatePassword
     )
 
-    process {
+    begin {
         Test-RequiredGraphModule
 
+        $connectParams = @{}
+        if ($TenantId) { $connectParams['TenantId'] = $TenantId }
+        if ($ClientId) { $connectParams['ClientId'] = $ClientId }
+        switch ($PSCmdlet.ParameterSetName) {
+            'Thumbprint' { $connectParams['CertificateThumbprint'] = $CertificateThumbprint }
+            'CertificateFile' {
+                $connectParams['CertificatePath'] = $CertificatePath
+                $connectParams['CertificatePassword'] = $CertificatePassword
+            }
+        }
+        $context = Connect-EntraGraphSession @connectParams
+        $connectionClosed = $false
+        Write-ToLog -Message "Connected to Microsoft Graph (AuthType=$($context.AuthType)) for Copy-EntraUser." -Level 'INFO' -WhatIf:$false -Confirm:$false
+    }
+
+    process {
         $newUserCompanionParameter = @('NewUserPrincipalName', 'NewUserDisplayName', 'NewUserMailNickname', 'NewUserPassword', 'NewUserAccountEnabled')
         $suppliedNewUser = $PSBoundParameters.ContainsKey('NewUser')
         $suppliedAnyNewUserCompanion = [bool]($newUserCompanionParameter | Where-Object { $PSBoundParameters.ContainsKey($_) })
@@ -242,18 +274,6 @@ function Copy-EntraUser {
             }
         }
 
-        $connectParams = @{}
-        if ($TenantId) { $connectParams['TenantId'] = $TenantId }
-        if ($ClientId) { $connectParams['ClientId'] = $ClientId }
-        switch ($PSCmdlet.ParameterSetName) {
-            'Thumbprint' { $connectParams['CertificateThumbprint'] = $CertificateThumbprint }
-            'CertificateFile' {
-                $connectParams['CertificatePath'] = $CertificatePath
-                $connectParams['CertificatePassword'] = $CertificatePassword
-            }
-        }
-        $context = Connect-EntraGraphSession @connectParams
-
         try {
             $templateUser = Resolve-EntraTemplateUser -UserId $TemplateUserId
             $newUserObject = Resolve-EntraNewUser -NewUser $NewUser
@@ -265,6 +285,7 @@ function Copy-EntraUser {
 
             foreach ($group in $split.UnsupportedGroup) {
                 Write-Warning "Skipped group '$($group.DisplayName)' ($($group.Id)): dynamic-membership or role-assignable groups are not cloned by Copy-EntraUser."
+                Write-ToLog -Message "Skipped group '$($group.DisplayName)' ($($group.Id)): dynamic-membership or role-assignable groups are not cloned by Copy-EntraUser." -Level 'WARN' -WhatIf:$false -Confirm:$false
             }
 
             $roleAssignment = Get-EntraTemplateRoleAssignment -TemplateUserId $templateUser.Id
@@ -274,26 +295,33 @@ function Copy-EntraUser {
 
             foreach ($role in $roleSplit.UnsupportedRole) {
                 Write-Warning "Skipped role '$($role.DisplayName)' ($($role.RoleDefinitionId)): $($role.Reason)"
+                Write-ToLog -Message "Skipped role '$($role.DisplayName)' ($($role.RoleDefinitionId)): $($role.Reason)" -Level 'WARN' -WhatIf:$false -Confirm:$false
             }
 
             if ($PSCmdlet.ShouldProcess($newUserObject.Id, "Clone group memberships, PIM-for-Groups eligibility, and PIM directory role eligibility from '$TemplateUserId'")) {
                 foreach ($group in $split.PlainGroup) {
                     Add-EntraGroupMembership -GroupId $group.Id -NewUserId $newUserObject.Id
+                    Write-ToLog -Message "Added user '$($newUserObject.Id)' as a direct member of group '$($group.Id)'." -Level 'SUCCESS' -WhatIf:$false -Confirm:$false
                 }
 
                 foreach ($group in $split.PimGroup) {
                     Grant-EntraGroupEligibility -GroupId $group.Id -NewUserId $newUserObject.Id -AccessId $group.AccessId
+                    Write-ToLog -Message "Granted PIM-for-Groups '$($group.AccessId)' eligibility to user '$($newUserObject.Id)' for group '$($group.Id)'." -Level 'SUCCESS' -WhatIf:$false -Confirm:$false
                 }
 
                 foreach ($role in $roleSplit.PimRole) {
                     Grant-EntraRoleEligibility -RoleDefinitionId $role.RoleDefinitionId -NewUserId $newUserObject.Id -DirectoryScopeId $role.DirectoryScopeId
+                    Write-ToLog -Message "Granted PIM directory role eligibility to user '$($newUserObject.Id)' for role '$($role.RoleDefinitionId)' at scope '$($role.DirectoryScopeId)'." -Level 'SUCCESS' -WhatIf:$false -Confirm:$false
                 }
             }
         }
-        finally {
-            if ($context.AuthType -eq 'Delegated') {
+        catch {
+            if (-not $connectionClosed -and $context.AuthType -eq 'Delegated') {
                 Disconnect-MgGraph | Out-Null
+                Write-ToLog -Message 'Disconnected from Microsoft Graph after an error.' -Level 'INFO' -WhatIf:$false -Confirm:$false
+                $connectionClosed = $true
             }
+            throw
         }
 
         if ($PassThru) {
@@ -301,6 +329,13 @@ function Copy-EntraUser {
                 NewUserId         = $newUserObject.Id
                 GeneratedPassword = if ($passwordWasGenerated) { $plainPassword } else { $null }
             }
+        }
+    }
+
+    end {
+        if (-not $connectionClosed -and $context.AuthType -eq 'Delegated') {
+            Disconnect-MgGraph | Out-Null
+            Write-ToLog -Message 'Disconnected from Microsoft Graph.' -Level 'INFO' -WhatIf:$false -Confirm:$false
         }
     }
 }

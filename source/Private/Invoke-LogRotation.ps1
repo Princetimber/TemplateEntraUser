@@ -44,37 +44,6 @@ function Invoke-LogRotation {
     }
 }
 
-# ============================================================================
-# WRAPPER FUNCTIONS FOR MOCKABILITY
-# ============================================================================
-
-# Wraps Move-Item for Pester mocking.
-function Move-ItemWrapper {
-    [CmdletBinding()]
-    [OutputType([void])]
-    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '',
-        Justification = 'Wrapper function; ShouldProcess handled by calling function.')]
-    param(
-        [Parameter(Mandatory)]
-        [string]$LiteralPath,
-
-        [Parameter(Mandatory)]
-        [string]$Destination
-    )
-
-    Move-Item -LiteralPath $LiteralPath -Destination $Destination -Force -ErrorAction Stop
-}
-
-# Wraps Remove-Item for Pester mocking.
-function Remove-ItemWrapper {
-    [CmdletBinding()]
-    [OutputType([void])]
-    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '',
-        Justification = 'Wrapper function; ShouldProcess handled by calling function.')]
-    param(
-        [Parameter(Mandatory)]
-        [string]$LiteralPath
-    )
-
-    Remove-Item -LiteralPath $LiteralPath -Force -ErrorAction Stop
-}
+# Move-ItemWrapper and Remove-ItemWrapper (used above for Pester mockability)
+# now live in their own files under source/Private/, per the project's
+# one-function-per-file convention.

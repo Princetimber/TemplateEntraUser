@@ -9,6 +9,10 @@ AfterAll {
 }
 
 Describe 'Grant-EntraGroupEligibility' {
+    BeforeAll {
+        Mock Write-ToLog { } -ModuleName $script:dscModuleName
+    }
+
     Context 'No existing eligibility schedule instance' {
         It 'Creates a new eligibility request with action AdminAssign' {
             InModuleScope -ModuleName $script:dscModuleName {
@@ -36,6 +40,34 @@ Describe 'Grant-EntraGroupEligibility' {
                 Grant-EntraGroupEligibility -GroupId '22222222-2222-2222-2222-222222222222' `
                     -NewUserId '00000000-0000-0000-0000-000000000004' -AccessId 'member' -Confirm:$false
                 Should -Invoke New-MgIdentityGovernancePrivilegedAccessGroupEligibilityScheduleRequest -Times 0
+            }
+        }
+    }
+
+    Context 'startDateTime uses UTC' {
+        It 'Passes a UTC startDateTime rather than local time' {
+            InModuleScope -ModuleName $script:dscModuleName {
+                Mock Get-MgIdentityGovernancePrivilegedAccessGroupEligibilityScheduleInstance { @() }
+                Mock New-MgIdentityGovernancePrivilegedAccessGroupEligibilityScheduleRequest { }
+
+                Grant-EntraGroupEligibility -GroupId '22222222-2222-2222-2222-222222222222' `
+                    -NewUserId '00000000-0000-0000-0000-000000000004' -AccessId 'member' -Confirm:$false
+
+                Should -Invoke New-MgIdentityGovernancePrivilegedAccessGroupEligibilityScheduleRequest -Times 1 -ParameterFilter {
+                    $BodyParameter.scheduleInfo.startDateTime.Kind -eq [System.DateTimeKind]::Utc
+                }
+            }
+        }
+    }
+
+    Context 'Get-Mg* read fails' {
+        It 'Rethrows an actionable error' {
+            InModuleScope -ModuleName $script:dscModuleName {
+                Mock Get-MgIdentityGovernancePrivilegedAccessGroupEligibilityScheduleInstance { throw 'Simulated Graph failure' }
+
+                { Grant-EntraGroupEligibility -GroupId '22222222-2222-2222-2222-222222222222' `
+                        -NewUserId '00000000-0000-0000-0000-000000000004' -AccessId 'member' -Confirm:$false } |
+                    Should -Throw '*22222222-2222-2222-2222-222222222222*'
             }
         }
     }

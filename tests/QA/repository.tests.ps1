@@ -78,10 +78,16 @@ Describe 'Repository contracts' -Tag 'QA' {
             $loggerContent = Get-Content -Path (
                 Join-Path $script:projectPath 'source/Private/Write-ToLog.ps1'
             ) -Raw
+            # The default log file path itself is built in Initialize-LogFilePath,
+            # split into its own file per the one-function-per-file convention.
+            $logPathInitContent = Get-Content -Path (
+                Join-Path $script:projectPath 'source/Private/Initialize-LogFilePath.ps1'
+            ) -Raw
 
-            $loggerContent | Should -Match 'Copy-EntraUser_\$\('
+            $logPathInitContent | Should -Match 'Copy-EntraUser_\$\('
             $loggerContent | Should -Match 'Global\\Copy-EntraUserLog'
             $loggerContent | Should -Not -Match 'Invoke-ADDSDomainController'
+            $logPathInitContent | Should -Not -Match 'Invoke-ADDSDomainController'
         }
     }
 

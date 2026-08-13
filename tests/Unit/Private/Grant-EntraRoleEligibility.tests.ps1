@@ -8,6 +8,10 @@ AfterAll {
 }
 
 Describe 'Grant-EntraRoleEligibility' {
+    BeforeAll {
+        Mock Write-ToLog { } -ModuleName $script:dscModuleName
+    }
+
     Context 'No existing eligibility schedule instance' {
         It 'Creates a new eligibility request with action AdminAssign and no expiration' {
             InModuleScope -ModuleName $script:dscModuleName {
@@ -72,6 +76,34 @@ Describe 'Grant-EntraRoleEligibility' {
                     -NewUserId '00000000-0000-0000-0000-000000000004' -WhatIf
 
                 Should -Invoke New-MgRoleManagementDirectoryRoleEligibilityScheduleRequest -Times 0
+            }
+        }
+    }
+
+    Context 'startDateTime uses UTC' {
+        It 'Passes a UTC startDateTime rather than local time' {
+            InModuleScope -ModuleName $script:dscModuleName {
+                Mock Get-MgRoleManagementDirectoryRoleEligibilityScheduleInstance { @() }
+                Mock New-MgRoleManagementDirectoryRoleEligibilityScheduleRequest { }
+
+                Grant-EntraRoleEligibility -RoleDefinitionId '66666666-6666-6666-6666-666666666666' `
+                    -NewUserId '00000000-0000-0000-0000-000000000004' -Confirm:$false
+
+                Should -Invoke New-MgRoleManagementDirectoryRoleEligibilityScheduleRequest -Times 1 -ParameterFilter {
+                    $BodyParameter.scheduleInfo.startDateTime.Kind -eq [System.DateTimeKind]::Utc
+                }
+            }
+        }
+    }
+
+    Context 'Get-Mg* read fails' {
+        It 'Rethrows an actionable error' {
+            InModuleScope -ModuleName $script:dscModuleName {
+                Mock Get-MgRoleManagementDirectoryRoleEligibilityScheduleInstance { throw 'Simulated Graph failure' }
+
+                { Grant-EntraRoleEligibility -RoleDefinitionId '66666666-6666-6666-6666-666666666666' `
+                        -NewUserId '00000000-0000-0000-0000-000000000004' -Confirm:$false } |
+                    Should -Throw '*66666666-6666-6666-6666-666666666666*'
             }
         }
     }
