@@ -23,3 +23,5 @@ package-lock.json
 PowerShellEditorServices.json
 .worktrees/
 .superpowers/
+graphify-out/
+testResults.xml
