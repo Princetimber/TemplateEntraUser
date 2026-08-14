@@ -30,27 +30,6 @@ PowerShell module `Copy-EntraUser` built with the **Sampler** framework. This mo
 - When tests fail, fix and re-run iteratively until all pass before committing.
 - Mock Windows-only cmdlets (e.g., `Get-Service`, `Get-EventLog`) when writing tests that need to run cross-platform.
 
-## Module Structure (Sampler Layout)
-
-```
-Copy-EntraUser/
-├── source/
-│   ├── Copy-EntraUser.psd1      # Module manifest
-│   ├── Copy-EntraUser.psm1      # Dot-sources Public/ and Private/
-│   ├── Public/                   # Exported functions (one per file)
-│   ├── Private/                  # Internal helper functions (one per file)
-│   └── en-US/                    # Help files
-├── tests/
-│   ├── QA/                       # ScriptAnalyzer, changelog, help quality
-│   │   └── module.tests.ps1
-│   └── Unit/
-│       ├── Public/               # Tests mirror source/Public/
-│       └── Private/              # Tests mirror source/Private/
-├── build.ps1
-├── build.yaml
-└── RequiredModules.psd1
-```
-
 ## Common Commands
 
 ```powershell
