@@ -133,6 +133,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   parameter set. `Write-ToLog` (the module's standard logger) and
   `Invoke-LogRotation` (invoked from within `Write-ToLog`) are unchanged.
 
+- Removed the opencode dev-tooling integration: `opencode.json` (agent config,
+  MCP server wiring, permissions) and `.github/workflows/opencode.yml` (the
+  `/oc`/`/opencode` comment-triggered GitHub Actions workflow). Neither file
+  was referenced by the module, its tests, or the build/release pipelines —
+  this only removes optional CI/dev tooling. If `ANTHROPIC_API_KEY` was added
+  to repository or organization secrets solely for this workflow, it should be
+  revoked there as well.
+
 ### Security
 
 - Restricted the opencode GitHub Actions workflow to trusted commenters (repo
