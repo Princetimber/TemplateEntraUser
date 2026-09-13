@@ -5,6 +5,12 @@ on:
     tags:
       - 'v*'
       - '!*-*'  # Exclude pre-release tags
+  workflow_dispatch:
+    inputs:
+      version_to_unlist:
+        description: 'Module version to unlist from PowerShell Gallery (e.g. 0.1.0).'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -12,6 +18,7 @@ permissions:
 jobs:
   build:
     name: Build Module
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,6 +48,7 @@ jobs:
 
   test:
     name: Test (${{ matrix.os }})
+    if: github.event_name == 'push'
     needs: build
     runs-on: ${{ matrix.os }}
     strategy:
@@ -67,6 +75,7 @@ jobs:
 
   publish:
     name: Publish
+    if: github.event_name == 'push'
     needs: test
     runs-on: ubuntu-latest
     steps:
@@ -95,3 +104,52 @@ jobs:
           generate_release_notes: true
           files: |
             output/*.nupkg
+
+      - name: Determine Previous Version
+        # The tag just pushed vs. the tag immediately before it by creation
+        # order, restricted to release tags (vN.N.N, no pre-release suffix).
+        # First-ever release has no previous tag - the next step is skipped.
+        id: previous_version
+        shell: bash
+        run: |
+          current_tag="${GITHUB_REF_NAME}"
+          previous_tag=$(git tag --sort=-creatordate | grep -v -F "$current_tag" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || true)
+          echo "tag=${previous_tag}" >> "$GITHUB_OUTPUT"
+          echo "version=${previous_tag#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Unlist Superseded Version from PSGallery
+        # Best-effort: must never fail the release - the new version has
+        # already published successfully by this point.
+        if: steps.previous_version.outputs.version != ''
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $ModuleName = 'Copy-EntraUser'
+          $Version = $env:PREVIOUS_VERSION
+          $Uri = "https://www.powershellgallery.com/api/v2/package/$ModuleName/$Version"
+          Invoke-WebRequest -Uri $Uri -Method Delete -Headers @{ 'X-NuGet-ApiKey' = $env:GalleryApiToken }
+          Write-Host "Unlisted superseded version $ModuleName $Version (superseded by $env:CURRENT_TAG)."
+        env:
+          PREVIOUS_VERSION: ${{ steps.previous_version.outputs.version }}
+          CURRENT_TAG: ${{ github.ref_name }}
+          GalleryApiToken: ${{ secrets.PSGALLERY_API_KEY }}
+
+  unlist:
+    name: Unlist from PSGallery
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Unlist version
+        shell: pwsh
+        run: |
+          $ModuleName = 'Copy-EntraUser'
+          $Version = $env:VERSION_TO_UNLIST
+          if ($Version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') {
+              throw "Version '$Version' doesn't look like a semantic version (e.g. 0.1.0) - refusing to proceed."
+          }
+          $Uri = "https://www.powershellgallery.com/api/v2/package/$ModuleName/$Version"
+          Invoke-WebRequest -Uri $Uri -Method Delete -Headers @{ 'X-NuGet-ApiKey' = $env:GalleryApiToken }
+          Write-Host "Unlisted $ModuleName $Version from PowerShell Gallery."
+        env:
+          VERSION_TO_UNLIST: ${{ inputs.version_to_unlist }}
+          GalleryApiToken: ${{ secrets.PSGALLERY_API_KEY }}
